@@ -1,0 +1,31 @@
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# Python
+python/__pycache__/
+python/*.egg-info/
+python/.venv/
+python/build/
+python/dist/
+python/.pytest_cache/
+python/.mypy_cache/
+
+# Node
+js/node_modules/
+js/dist/
+js/.turbo/
+js/.pnpm-store/
+
+# Rust
+rust/target/
+
+# Go
+go/bin/
+go/pkg/
+
+# Common
+.env
+.env.*

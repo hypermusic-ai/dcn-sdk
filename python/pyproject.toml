@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
+build-backend = "hatchling.build"
+
+[project]
+name = "dcn"
+description = "Decentralized Creative Network Python package"
+readme = "README.md"
+authors = [{ name = "hypermusic.ai" }]
+license = { text = "BSD-2-Clause" }
+requires-python = ">=3.9"
+dependencies = [
+  "requests>=2.31",
+  "eth-account>=0.10",
+]
+dynamic = ["version"]  # pulled from Git tag by hatch-vcs
+
+[project.urls]
+Homepage = "https://decentralised.art/"
+
+[project.scripts]
+dcn-auth = "dcn.cli:main"
+
+[tool.hatch.version]
+source = "vcs"   # derive version from tags like dcn-python-v0.1.0
+
+[tool.hatch.build.hooks.vcs]
+root = ".."
+tag-pattern = "^dcn-python-v(?P<version>.*)$"
+version-file = "dcn/_version.py"   # optional but recommended for sdists
+
+[tool.hatch.version.raw-options]
+fallback_version = "0.1.0"
+
+[tool.hatch.build.targets.wheel]
+packages = ["dcn"]

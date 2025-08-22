@@ -1,0 +1,71 @@
+# --- OS / Editors ---
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+.history/
+
+# --- Python bytecode / caches ---
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.cache/
+
+# --- Virtual environments / tools ---
+.venv/
+venv/
+env/
+ENV/
+pip-wheel-metadata/
+.python-version  # pyenv
+
+# --- Build / packaging artifacts ---
+build/
+dist/
+*.egg-info/
+*.egg
+.eggs/
+develop-eggs/
+wheelhouse/
+
+# --- Compiled extensions ---
+*.so
+*.pyd
+*.dll
+*.dylib
+
+# --- Test / coverage ---
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+
+# --- Type checkers / linters ---
+.mypy_cache/
+.pytype/
+.pyre/
+.ruff_cache/
+
+# --- Docs (if using Sphinx/MkDocs) ---
+docs/_build/
+site/
+*.doctree
+.doctrees/
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Envs / secrets / local config ---
+.env
+.env.*
+*.local
+*.secret
+secrets.*.json
+
+# --- Logs / misc ---
+*.log
+logs/
