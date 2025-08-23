@@ -1,1 +1,462 @@
-# API contracts
+openapi: 3.1.0
+info:
+  title: DCN Public API
+  version: 1.0.0
+  description: >
+    Contract generated from route list. Optional (~) path parts are expressed as
+    separate paths.
+
+servers:
+  - url: https://api.decentralised.art
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    EthAddress:
+      name: address
+      in: path
+      required: true
+      description: Ethereum address (0x + 40 hex)
+      schema:
+        type: string
+        pattern: '^0x[a-fA-F0-9]{40}$'
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 0, default: 0 }
+    FeatureName:
+      name: featureName
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    FeatureVersion:
+      name: featureVersion
+      in: path
+      required: true
+      description: Feature version (opaque, no '/')
+      schema: { type: string, pattern: '^[^/]+$' }
+    TransformationName:
+      name: transformationName
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    TransformationVersion:
+      name: transformationVersion
+      in: path
+      required: true
+      description: Transformation version (opaque, no '/')
+      schema: { type: string, pattern: '^[^/]+$' }
+    NumSamples:
+      name: numSamples
+      in: path
+      required: true
+      description: Number of samples (N)
+      schema: { type: integer, minimum: 1 }
+    ExecutePairs:
+      name: pairs
+      in: path
+      required: true
+      description: >
+        One or more tuples encoded inline, e.g. `(0;12)(512;24)`.
+        Each tuple is `(startPoint;transformationShift)`.
+      schema:
+        type: string
+        pattern: '^\(\d+;\d+\)(\(\d+;\d+\))*$'
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, message]
+            properties:
+              error: { type: string }
+              message: { type: string }
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, message]
+            properties:
+              error: { type: string }
+              message: { type: string }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, message]
+            properties:
+              error: { type: string }
+              message: { type: string }
+
+  schemas:
+    VersionResponse:
+      type: object
+      required: [version]
+      properties:
+        version: { type: string }
+        buildTimestamp: { type: string, description: "Optional server build timestamp" }
+
+    NonceResponse:
+      type: object
+      required: [address, nonce]
+      properties:
+        address: { type: string }
+        nonce: { type: string }
+        expiresAt: { type: string, format: date-time, nullable: true }
+
+    AuthRequest:
+      type: object
+      required: [address, message, signature]
+      properties:
+        address: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+        message: { type: string }
+        signature: { type: string, description: "Hex ECDSA signature of message" }
+
+    AuthResponse:
+      type: object
+      required: [access_token, refresh_token, expires_in, token_type]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+        expires_in: { type: integer, minimum: 1 }
+        token_type: { type: string, enum: [Bearer], default: Bearer }
+
+    RefreshRequest:
+      type: object
+      description: >
+        If your server expects tokens in headers (Authorization + X-Refresh-Token),
+        this body may be empty.
+      additionalProperties: false
+
+    RefreshResponse:
+      type: object
+      required: [access_token, expires_in, token_type]
+      properties:
+        access_token: { type: string }
+        expires_in: { type: integer, minimum: 1 }
+        token_type: { type: string, enum: [Bearer], default: Bearer }
+        refresh_token: { type: string, nullable: true }
+
+    AccountItem:
+      type: object
+      properties:
+        id: { type: string }
+        kind: { type: string }
+        createdAt: { type: string, format: date-time }
+
+    AccountPage:
+      type: object
+      required: [items, page, limit]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/AccountItem' }
+        page: { type: integer, minimum: 0 }
+        limit: { type: integer, minimum: 1 }
+        nextPage: { type: integer, nullable: true }
+
+    FeatureGetResponse:
+      type: object
+      properties:
+        name: { type: string }
+        version: { type: string }
+        metadata: { type: object, additionalProperties: true }
+
+    FeatureCreateRequest:
+      type: object
+      required: [name, payload]
+      properties:
+        name: { type: string }
+        version: { type: string, nullable: true }
+        payload: { type: object, additionalProperties: true }
+
+    FeatureCreateResponse:
+      type: object
+      properties:
+        txHash: { type: string }
+        resource: { $ref: '#/components/schemas/FeatureGetResponse' }
+
+    TransformationGetResponse:
+      type: object
+      properties:
+        name: { type: string }
+        version: { type: string }
+        metadata: { type: object, additionalProperties: true }
+
+    TransformationCreateRequest:
+      type: object
+      required: [name, payload]
+      properties:
+        name: { type: string }
+        version: { type: string, nullable: true }
+        payload: { type: object, additionalProperties: true }
+
+    TransformationCreateResponse:
+      type: object
+      properties:
+        txHash: { type: string }
+        resource: { $ref: '#/components/schemas/TransformationGetResponse' }
+
+    ExecuteResponse:
+      type: object
+      properties:
+        request:
+          type: object
+          properties:
+            featureName: { type: string }
+            numSamples: { type: integer }
+            ranges:
+              type: array
+              description: Tuples as [startPoint, transformationShift]
+              items:
+                type: array
+                prefixItems:
+                  - { type: integer, minimum: 0 }  # startPoint
+                  - { type: integer, minimum: 0 }  # transformationShift
+                minItems: 2
+                maxItems: 2
+        result:
+          type: object
+          additionalProperties: true
+        txHash:
+          type: string
+      required: [request]
+
+paths:
+  # --- Version ---
+  /version:
+    get:
+      operationId: version.getVersion
+      summary: Get API version
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionResponse' }
+
+  # --- Nonce ---
+  /nonce/{address}:
+    get:
+      operationId: auth.getNonce
+      summary: Get a login nonce for an Ethereum address
+      parameters:
+        - $ref: '#/components/parameters/EthAddress'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NonceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  # --- Auth ---
+  /auth:
+    post:
+      operationId: auth.postAuth
+      summary: Authenticate using signed message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # --- Refresh ---
+  /refresh:
+    post:
+      operationId: auth.postRefresh
+      summary: Refresh an access token
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefreshResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # --- Account ---
+  /account/{address}:
+    get:
+      operationId: account.getAccountInfo
+      summary: Get account info (paged)
+      parameters:
+        - $ref: '#/components/parameters/EthAddress'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountPage' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  # --- Feature (optional version) ---
+  /feature/{featureName}:
+    get:
+      operationId: feature.getByName
+      summary: Get feature by name (latest / summary)
+      parameters:
+        - $ref: '#/components/parameters/FeatureName'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/FeatureGetResponse'
+                  - type: object
+                    additionalProperties: true
+
+  /feature/{featureName}/{featureVersion}:
+    get:
+      operationId: feature.getByNameVersion
+      summary: Get a specific feature version
+      parameters:
+        - $ref: '#/components/parameters/FeatureName'
+        - $ref: '#/components/parameters/FeatureVersion'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeatureGetResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /feature:
+    post:
+      operationId: feature.postFeature
+      summary: Create/Publish a feature
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FeatureCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeatureCreateResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # --- Transformation (optional version) ---
+  /transformation/{transformationName}:
+    get:
+      operationId: transformation.getByName
+      summary: Get transformation by name (latest / summary)
+      parameters:
+        - $ref: '#/components/parameters/TransformationName'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                anyOf:
+                  - $ref: '#/components/schemas/TransformationGetResponse'
+                  - type: object
+                    additionalProperties: true
+
+  /transformation/{transformationName}/{transformationVersion}:
+    get:
+      operationId: transformation.getByNameVersion
+      summary: Get a specific transformation version
+      parameters:
+        - $ref: '#/components/parameters/TransformationName'
+        - $ref: '#/components/parameters/TransformationVersion'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransformationGetResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /transformation:
+    post:
+      operationId: transformation.postTransformation
+      summary: Create/Publish a transformation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransformationCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransformationCreateResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  # --- Execute (optional pairs) ---
+  /execute/{featureName}/{numSamples}:
+    get:
+      operationId: execute.getNoPairs
+      summary: Execute feature without ranges
+      parameters:
+        - $ref: '#/components/parameters/FeatureName'
+        - $ref: '#/components/parameters/NumSamples'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecuteResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /execute/{featureName}/{numSamples}/{pairs}:
+    get:
+      operationId: execute.getWithPairs
+      summary: Execute feature with ranges
+      parameters:
+        - $ref: '#/components/parameters/FeatureName'
+        - $ref: '#/components/parameters/NumSamples'
+        - $ref: '#/components/parameters/ExecutePairs'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ExecuteResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
