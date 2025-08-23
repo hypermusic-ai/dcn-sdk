@@ -69,3 +69,6 @@ secrets.*.json
 # --- Logs / misc ---
 *.log
 logs/
+
+# --- DCN API client ---
+dcn_api_client/
