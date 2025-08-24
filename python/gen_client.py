@@ -20,11 +20,12 @@ def main():
         raise SystemExit(f"{DEST} exists and is not a directory")
 
     if SPEC.exists():
-        run("openapi-python-client", "generate",
-                "--path", str(SPEC),
-                "--config", str(CONFIG),
-                "--output-path", str(OUT_DIR),
-                "--overwrite")
+        run(sys.executable, "-m", "openapi_python_client", "generate",
+            "--path", str(SPEC),
+            "--config", str(CONFIG),
+            "--output-path", str(OUT_DIR),
+            "--overwrite")
+    
     else:
         raise SystemExit(f"Spec not found: {SPEC}")
 

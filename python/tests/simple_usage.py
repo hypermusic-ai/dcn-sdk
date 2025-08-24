@@ -13,14 +13,26 @@ def main() :
     #post_transform = sdk_client.transformation_post(dcn.TransformationCreateRequest("t1", "return x + args[0];"))
     #print(post_transform)
 
-    feature_post = sdk_client.feature_post(
-        dcn.FeatureCreateRequest("f1", 
-        [
-            dcn.FeatureDimensionCreateRequest("pitch", 
-            [
-                dcn.TransformationRef("t1", [1])
-            ])
-        ]))
+    # feature_post = sdk_client.feature_post(
+    #     dcn.FeatureCreateRequest("f1", 
+    #     [
+    #         dcn.FeatureDimensionCreateRequest("pitch", 
+    #         [
+    #             dcn.TransformationRef("t1", [1])
+    #         ])
+    #     ]))
+    
+    feature_post = sdk_client.feature_post({
+        "name": "f3",
+        "dimensions": [
+            {
+                "feature_name": "pitch",
+                "transformations": [
+                    {"name": "t1", "args": [1]}
+                ]
+            }
+        ]
+    })
     print(feature_post)
 
 if __name__ == "__main__":
