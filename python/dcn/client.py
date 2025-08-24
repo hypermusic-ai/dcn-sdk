@@ -3,7 +3,8 @@ from __future__ import annotations
 import importlib, os, re
 from dataclasses import dataclass, field
 import logging
-from typing import Callable, List, Optional, Tuple
+from typing import Any, Callable, List, Optional, Tuple
+from collections.abc import Mapping
 
 import httpx
 from eth_account import Account
@@ -192,6 +193,12 @@ class Client:
         ])
         return self._call(fn, body=req)
 
+    def feature_post(self, src_dict: Mapping[str, Any]):
+        fn = _resolve_op([
+            "dcn.dcn_api_client.api.feature.post_feature",
+        ])
+        return self._call(fn, body=FeatureCreateRequest.from_dict(src_dict))
+
     # Transformation
     def transformation_get(self, name: str, version: Optional[str] = None):
         if version is None:
@@ -209,6 +216,12 @@ class Client:
             "dcn.dcn_api_client.api.transformation.post_transformation",
         ])
         return self._call(fn, body=req)
+
+    def transformation_post(self, src_dict: Mapping[str, Any]):
+        fn = _resolve_op([
+            "dcn.dcn_api_client.api.transformation.post_transformation",
+        ])
+        return self._call(fn, body=TransformationCreateRequest.from_dict(src_dict))
 
     # Execute
     def execute(self, feature_name: str, num_samples: int, running_instances: Optional[List[Tuple[int, int]]] = None):

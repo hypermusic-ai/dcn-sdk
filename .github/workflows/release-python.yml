@@ -1,0 +1,86 @@
+name: Python Package • Build, Test & Release
+
+on:
+  push:
+    branches: [ main ]
+    tags:
+      - "dcn-python-v*"
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: release-python-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PACKAGE_DIR: python
+
+jobs:
+  build-and-test:
+    name: Build client & test (${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.10", "3.11", "3.12"]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # hatch-vcs / version-from-git needs tags
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install base tooling
+        run: |
+          python -m pip install -U pip
+          pip install build hatchling hatch-vcs pipx
+          pip install pytest
+          pipx install openapi-python-client
+          pipx ensurepath
+
+      - name: Install package (editable) + dev deps if present
+        run: |
+          cd "$PACKAGE_DIR"
+          pip install -e .
+
+  build-dist:
+    name: Build sdist/wheel
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install build backend
+        run: |
+          python -m pip install -U pip
+          pip install build hatchling hatch-vcs pipx
+          pipx install openapi-python-client
+          pipx ensurepath
+
+      - name: Build distribution
+        run: |
+          cd "$PACKAGE_DIR"
+          python -m build
+          ls -l dist
+
+      - name: Upload dist artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: ${{ env.PACKAGE_DIR }}/dist/*
