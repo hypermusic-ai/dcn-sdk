@@ -1,0 +1,1 @@
+pip install "git+https://github.com/hypermusic-ai/dcn-sdk.git@latest#subdirectory=python"
