@@ -1,5 +1,9 @@
 [build-system]
-requires = ["hatchling>=1.25", "hatch-vcs>=0.4"]
+requires = [
+    "hatchling>=1.25",
+    "hatch-vcs>=0.4",
+    "openapi-python-client>=0.25"
+]
 build-backend = "hatchling.build"
 
 [project]
