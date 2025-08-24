@@ -13,6 +13,8 @@ dependencies = [
   "eth-account>=0.10",
   "pydantic>=2.6,<3",
   "httpx>=0.27,<1",
+  "attrs>=23.1,<24",
+  "python-dateutil>=1.4",
 ]
 dynamic = ["version"]  # pulled from Git tag by hatch-vcs
 
@@ -35,3 +37,16 @@ fallback_version = "0.1.0"
 
 [tool.hatch.build.targets.wheel]
 packages = ["dcn"]
+
+[tool.hatch.build.targets.sdist]
+include = ["dcn/**", "pyproject.toml", "README.md"]
+
+[project.optional-dependencies]
+test = [
+  "requests>=2.31"     # only for tests
+]
+
+[tool.hatch.envs.test]
+features = ["test"]   # installs the [project.optional-dependencies].test extra
+[tool.hatch.envs.test.scripts]
+unit = "python -m unittest discover -s tests -p 'test_*.py' -v"
