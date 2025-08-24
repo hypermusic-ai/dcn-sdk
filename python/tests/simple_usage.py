@@ -7,6 +7,9 @@ def main() :
 
     sdk_client.login_with_account(acc)
 
+    version = sdk_client.version()
+    print(version)
+
     exec_result = sdk_client.execute("test1", 5, [(0,0),(0,0),(0,0),(0,0),(0,0),(0,0)])
     print(exec_result)
 
@@ -22,18 +25,18 @@ def main() :
     #         ])
     #     ]))
     
-    feature_post = sdk_client.feature_post({
-        "name": "f3",
-        "dimensions": [
-            {
-                "feature_name": "pitch",
-                "transformations": [
-                    {"name": "t1", "args": [1]}
-                ]
-            }
-        ]
-    })
-    print(feature_post)
+    # feature_post = sdk_client.feature_post({
+    #     "name": "f3",
+    #     "dimensions": [
+    #         {
+    #             "feature_name": "pitch",
+    #             "transformations": [
+    #                 {"name": "t1", "args": [1]}
+    #             ]
+    #         }
+    #     ]
+    # })
+    # print(feature_post)
 
 if __name__ == "__main__":
     main()

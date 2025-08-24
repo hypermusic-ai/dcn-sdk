@@ -13,7 +13,8 @@ from eth_account import Account
 from .dcn_api_client import Client as _GenClient
 from .dcn_api_client import AuthenticatedClient as _GenAuthClient
 from .dcn_api_client.models import AuthRequest, RefreshRequest, FeatureCreateRequest, TransformationCreateRequest
-
+from .dcn_api_client.models import AuthResponse, RefreshResponse, NonceResponse, VersionResponse, AccountResponse
+from .dcn_api_client.models import FeatureGetResponse, TransformationGetResponse, FeatureCreateResponse, TransformationCreateResponse
 # --- local helpers ---
 from .crypto import sign_login_nonce
 
@@ -126,20 +127,20 @@ class Client:
     # -------------------- public API --------------------
 
     # Version
-    def version(self):
+    def version(self) -> VersionResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.version.get_version",
         ])
         return self._call(fn)
 
     # Auth
-    def get_nonce(self, address: str):
+    def get_nonce(self, address: str) -> NonceResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.auth.get_nonce",
         ])
         return self._call(fn, address=address)
 
-    def login_with_account(self, account: Account):
+    def login_with_account(self, account: Account) -> AuthResponse:
         nonce_resp = self.get_nonce(account.address)
         nonce = getattr(nonce_resp, "nonce", None) or (nonce_resp.get("nonce") if isinstance(nonce_resp, dict) else None)
         if not nonce:
@@ -157,7 +158,7 @@ class Client:
         self._set_tokens(access, refresh)
         return resp
 
-    def refresh(self):
+    def refresh(self) -> RefreshResponse:
         if not self.access_token or not self.refresh_token:
             raise RuntimeError("Missing tokens for refresh")
         fn = _resolve_op([
@@ -169,14 +170,14 @@ class Client:
         return resp
 
     # Account
-    def account_info(self, address: str, *, limit: int = 50, page: int = 0):
+    def account_info(self, address: str, *, limit: int = 50, page: int = 0) -> AccountResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.account.get_account_info",
         ])
         return self._call(fn, address=address, limit=limit, page=page)
 
     # Feature
-    def feature_get(self, name: str, version: Optional[str] = None):
+    def feature_get(self, name: str, version: Optional[str] = None) -> FeatureGetResponse:
         if version is None:
             fn = _resolve_op([
                 "dcn.dcn_api_client.api.feature.get_feature_by_name",
@@ -187,20 +188,20 @@ class Client:
         ])
         return self._call(fn, feature_name=name, feature_version=version)
 
-    def feature_post(self, req: FeatureCreateRequest):
+    def feature_post(self, req: FeatureCreateRequest) -> FeatureCreateResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.feature.post_feature",
         ])
         return self._call(fn, body=req)
 
-    def feature_post(self, src_dict: Mapping[str, Any]):
+    def feature_post(self, src_dict: Mapping[str, Any]) -> FeatureCreateResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.feature.post_feature",
         ])
         return self._call(fn, body=FeatureCreateRequest.from_dict(src_dict))
 
     # Transformation
-    def transformation_get(self, name: str, version: Optional[str] = None):
+    def transformation_get(self, name: str, version: Optional[str] = None) -> TransformationGetResponse:
         if version is None:
             fn = _resolve_op([
                 "dcn.dcn_api_client.api.transformation.get_transformation_by_name",
@@ -211,13 +212,13 @@ class Client:
         ])
         return self._call(fn, transformation_name=name, transformation_version=version)
 
-    def transformation_post(self, req: TransformationCreateRequest):
+    def transformation_post(self, req: TransformationCreateRequest) -> TransformationCreateResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.transformation.post_transformation",
         ])
         return self._call(fn, body=req)
 
-    def transformation_post(self, src_dict: Mapping[str, Any]):
+    def transformation_post(self, src_dict: Mapping[str, Any]) -> TransformationCreateResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.transformation.post_transformation",
         ])

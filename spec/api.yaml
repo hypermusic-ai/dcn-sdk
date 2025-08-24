@@ -319,6 +319,10 @@ components:
           type: array
           items: { type: integer }
 
+    ExecuteResponse:
+      type: array
+      items: { $ref: '#/components/schemas/ExecuteItem' }
+
 paths:
   /version:
     get:
@@ -519,9 +523,7 @@ paths:
           description: OK
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/ExecuteItem' }
+              schema: { $ref: '#/components/schemas/ExecuteResponse' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
 
@@ -539,8 +541,6 @@ paths:
           description: OK
           content:
             application/json:
-              schema:
-                type: array
-                items: { $ref: '#/components/schemas/ExecuteItem' }
+              schema: { $ref: '#/components/schemas/ExecuteResponse' }
         '400': { $ref: '#/components/responses/BadRequest' }
         '401': { $ref: '#/components/responses/Unauthorized' }
