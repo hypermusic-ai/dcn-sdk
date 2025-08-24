@@ -1,1 +1,546 @@
-# API contracts
+openapi: 3.0.3
+info:
+  title: DCN Public API
+  version: 1.0.0
+  description: |
+    Contract generated from route list. Optional (~) path parts are split into separate paths.
+
+servers:
+  - url: https://api.decentralised.art
+
+tags:
+  - name: version
+  - name: auth
+  - name: account
+  - name: feature
+  - name: transformation
+  - name: execute
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    RefreshTokenHeader:
+      name: X-Refresh-Token
+      in: header
+      required: true
+      description: Refresh token used to obtain a new access token.
+      schema:
+        type: string
+    EthAddress:
+      name: address
+      in: path
+      required: true
+      description: Ethereum address (0x + 40 hex)
+      schema:
+        type: string
+        pattern: '^0x[a-fA-F0-9]{40}$'
+    Limit:
+      name: limit
+      in: query
+      required: false
+      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
+    Page:
+      name: page
+      in: query
+      required: false
+      schema: { type: integer, minimum: 0, default: 0 }
+    FeatureName:
+      name: featureName
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    FeatureVersion:
+      name: featureVersion
+      in: path
+      required: true
+      description: Feature version (opaque, no '/')
+      schema: { type: string, pattern: '^[^/]+$' }
+    TransformationName:
+      name: transformationName
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    TransformationVersion:
+      name: transformationVersion
+      in: path
+      required: true
+      description: Transformation version (opaque, no '/')
+      schema: { type: string, pattern: '^[^/]+$' }
+    NumSamples:
+      name: numSamples
+      in: path
+      required: true
+      description: Number of samples (N)
+      schema: { type: integer, minimum: 1 }
+    RunningInstances:
+      name: running_instances
+      in: path
+      required: true
+      description: >
+        One or more tuples encoded inline, e.g. `(0;12)(512;24)`.
+        Each tuple is `(startPoint;transformationShift)`.
+      schema:
+        type: string
+        # allow one or more "(n;n)" inside square brackets, commas optional
+        pattern: '^\[(\(\d+;\d+\))(?:,?(\(\d+;\d+\)))*\]$'
+        example: "[(0;0)]"
+
+  responses:
+    BadRequest:
+      description: Bad request
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, message]
+            properties:
+              error: { type: string }
+              message: { type: string }
+    Unauthorized:
+      description: Unauthorized
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, message]
+            properties:
+              error: { type: string }
+              message: { type: string }
+    NotFound:
+      description: Not found
+      content:
+        application/json:
+          schema:
+            type: object
+            required: [error, message]
+            properties:
+              error: { type: string }
+              message: { type: string }
+
+  schemas:
+    VersionResponse:
+      type: object
+      required: [version]
+      properties:
+        version: { type: string }
+        buildTimestamp: { type: string, description: "Optional server build timestamp" }
+
+    NonceResponse:
+      type: object
+      required: [nonce]
+      properties:
+        address: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+        nonce: { type: string }
+        expiresAt: { type: string, format: date-time, nullable: true }
+
+    AuthRequest:
+      type: object
+      required: [address, message, signature]
+      properties:
+        address: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
+        message: { type: string }
+        signature: { type: string, description: "Hex ECDSA signature of message" }
+
+    AuthResponse:
+      type: object
+      required: [access_token, refresh_token]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string }
+
+    RefreshRequest:
+      type: object
+      description: May be empty; tokens can be provided via headers.
+      additionalProperties: false
+
+    RefreshResponse:
+      type: object
+      required: [access_token]
+      properties:
+        access_token: { type: string }
+        refresh_token: { type: string, nullable: true }
+
+    AccountResponse:
+      type: object
+      additionalProperties: false
+      required: [page, limit]
+      properties:
+        address:
+          type: string
+          description: Lowercase hex without 0x in current server output
+          pattern: '^[a-f0-9]{40}$'
+        limit: { type: integer, minimum: 1 }
+        page:  { type: integer, minimum: 0 }
+        total_features: { type: integer, minimum: 0 }
+        total_transformations: { type: integer, minimum: 0 }
+        owned_features:
+          type: array
+          items: { type: string }
+        owned_transformations:
+          type: array
+          items: { type: string }
+
+    FeatureGetResponse:
+      type: object
+      properties:
+        name: { type: string }
+        version: { type: string }
+        metadata: { type: object, additionalProperties: true }
+
+    FeatureCreateRequest:
+      type: object
+      description: Request payload to create a new feature definition composed of multiple dimensions.
+      additionalProperties: false
+      required: [name, dimensions]
+      properties:
+        name:
+          type: string
+          description: Unique feature name.
+          minLength: 1
+          maxLength: 64
+          pattern: '^[A-Za-z_][A-Za-z0-9_\-]*$'
+          example: melody
+        dimensions:
+          type: array
+          description: The list of dimensions that together define the feature.
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/FeatureDimensionCreateRequest'
+      example:
+        name: melody
+        dimensions:
+          - feature_name: pitch
+            transformations:
+              - name: add
+                args: [1]
+              - name: mul
+                args: [2]
+          - feature_name: time
+            transformations: []
+          - feature_name: rythm
+            transformations:
+              - name: nop
+                args: []
+
+    FeatureDimensionCreateRequest:
+      type: object
+      description: Declares which base feature to use and the ordered transformations to apply.
+      additionalProperties: false
+      required: [feature_name, transformations]
+      properties:
+        feature_name:
+          type: string
+          description: The base feature name (e.g., "pitch", "time", "rythm").
+          minLength: 1
+          pattern: '^[A-Za-z_][A-Za-z0-9_\-]*$'
+          example: pitch
+        transformations:
+          type: array
+          description: Ordered list of transformations (by name) with positional args.
+          items:
+            $ref: '#/components/schemas/TransformationRef'
+          example:
+            - name: add
+              args: [1]
+            - name: mul
+              args: [2]
+
+    TransformationRef:
+      type: object
+      description: Reference to a previously registered transformation, with positional numeric args.
+      additionalProperties: false
+      required: [name, args]
+      properties:
+        name:
+          type: string
+          description: Name of a registered transformation to invoke.
+          minLength: 1
+          pattern: '^[A-Za-z_][A-Za-z0-9_\-]*$'
+          example: add
+        args:
+          type: array
+          description: Positional numeric arguments (empty for no-arg transformations like "nop").
+          minItems: 0
+          items:
+            type: number
+          example: [1]
+
+
+    FeatureCreateResponse:
+      type: object
+      properties:
+        txHash: { type: string }
+        resource: { $ref: '#/components/schemas/FeatureGetResponse' }
+
+    TransformationGetResponse:
+      type: object
+      properties:
+        name: { type: string }
+        version: { type: string }
+        metadata: { type: object, additionalProperties: true }
+
+    TransformationCreateRequest:
+      type: object
+      description: Define/register a transformation by name and its Solidity source.
+      additionalProperties: false
+      required: [name, sol_src]
+      properties:
+        name:
+          type: string
+          description: Unique transformation identifier (e.g., "add", "mul", "nop").
+          minLength: 1
+          pattern: '^[A-Za-z_][A-Za-z0-9_\-]*$'
+          example: add
+        sol_src:
+          type: string
+          description: Solidity-like snippet implementing the transformation. Receives (x, args).
+          example: "return x + args[0];"
+
+    TransformationCreateResponse:
+      type: object
+      properties:
+        txHash: { type: string }
+        resource: { $ref: '#/components/schemas/TransformationGetResponse' }
+
+    ExecuteItem:
+      type: object
+      additionalProperties: false
+      required: [feature_path, data]
+      properties:
+        feature_path:
+          type: string
+          description: Feature sub-path that produced this series.
+        data:
+          type: array
+          items: { type: integer }
+
+paths:
+  /version:
+    get:
+      tags: [version]
+      operationId: get_version
+      summary: Get API version
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/VersionResponse' }
+
+  /nonce/{address}:
+    get:
+      tags: [auth]
+      operationId: get_nonce
+      summary: Get a login nonce for an Ethereum address
+      parameters:
+        - $ref: '#/components/parameters/EthAddress'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/NonceResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+
+  /auth:
+    post:
+      tags: [auth]
+      operationId: post_auth
+      summary: Authenticate using signed message
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AuthRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuthResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /refresh:
+    post:
+      tags: [auth]
+      operationId: post_refresh
+      summary: Refresh an access token
+      parameters:
+        - $ref: '#/components/parameters/RefreshTokenHeader'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RefreshRequest' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RefreshResponse' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /account/{address}:
+    get:
+      tags: [account]
+      operationId: get_account_info
+      summary: Get account info (paged)
+      parameters:
+        - $ref: '#/components/parameters/EthAddress'
+        - $ref: '#/components/parameters/Limit'
+        - $ref: '#/components/parameters/Page'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AccountResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /feature/{featureName}:
+    get:
+      tags: [feature]
+      operationId: get_feature_by_name
+      summary: Get feature by name (latest / summary)
+      parameters:
+        - $ref: '#/components/parameters/FeatureName'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeatureGetResponse' }
+
+  /feature/{featureName}/{featureVersion}:
+    get:
+      tags: [feature]
+      operationId: get_feature_by_name_version
+      summary: Get a specific feature version
+      parameters:
+        - $ref: '#/components/parameters/FeatureName'
+        - $ref: '#/components/parameters/FeatureVersion'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeatureGetResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /feature:
+    post:
+      tags: [feature]
+      operationId: post_feature
+      summary: Create/Publish a feature
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/FeatureCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/FeatureCreateResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /transformation/{transformationName}:
+    get:
+      tags: [transformation]
+      operationId: get_transformation_by_name
+      summary: Get transformation by name (latest / summary)
+      parameters:
+        - $ref: '#/components/parameters/TransformationName'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransformationGetResponse' }
+
+  /transformation/{transformationName}/{transformationVersion}:
+    get:
+      tags: [transformation]
+      operationId: get_transformation_by_name_version
+      summary: Get a specific transformation version
+      parameters:
+        - $ref: '#/components/parameters/TransformationName'
+        - $ref: '#/components/parameters/TransformationVersion'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransformationGetResponse' }
+        '404': { $ref: '#/components/responses/NotFound' }
+
+  /transformation:
+    post:
+      tags: [transformation]
+      operationId: post_transformation
+      summary: Create/Publish a transformation
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TransformationCreateRequest' }
+      responses:
+        '201':
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TransformationCreateResponse' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /execute/{featureName}/{numSamples}:
+    get:
+      tags: [execute]
+      operationId: get_execute_no_running_instances
+      summary: Execute feature without running instances
+      parameters:
+        - $ref: '#/components/parameters/FeatureName'
+        - $ref: '#/components/parameters/NumSamples'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ExecuteItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+
+  /execute/{featureName}/{numSamples}/{running_instances}:
+    get:
+      tags: [execute]
+      operationId: get_execute_with_running_instances
+      summary: Execute feature with running instances
+      parameters:
+        - $ref: '#/components/parameters/FeatureName'
+        - $ref: '#/components/parameters/NumSamples'
+        - $ref: '#/components/parameters/RunningInstances'
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ExecuteItem' }
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '401': { $ref: '#/components/responses/Unauthorized' }

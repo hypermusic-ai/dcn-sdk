@@ -1,0 +1,6 @@
+{
+  "project_name_override": "dcn_api_client",
+  "package_name_override": "dcn_api_client",
+  "class_overrides": {},
+  "use_path_prefixes_for_title_model_names": true
+}
