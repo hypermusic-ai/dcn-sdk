@@ -41,14 +41,20 @@ version-file = "dcn/_version.py"   # optional but recommended for sdists
 fallback_version = "0.1.0"
 
 [tool.hatch.build.targets.wheel]
-packages = ["dcn"]
+packages = ["dcn", "dcn.dcn_api_client"]
+
+# Ensure the whole tree is included even if Hatch didn't detect it as a package
+[tool.hatch.build.targets.wheel.force-include]
+"dcn/dcn_api_client" = "dcn/dcn_api_client"
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "dcn/**",
-  "pyproject.toml",
-  "README.md",
-  "openapi-python-client.json",
+    "dcn/**",
+    "pyproject.toml",
+    "README.md",
+    "openapi-python-client.json",
+    "gen_client.py",
+    "hatch_build.py"
 ]
 
 [tool.hatch.build.hooks.custom]

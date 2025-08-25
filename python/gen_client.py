@@ -15,6 +15,13 @@ def run(*args):
     subprocess.check_call(args)
 
 def main():
+    print("gen_client.py")
+    print("Root dir:", ROOT)
+    print("Config:", CONFIG)
+    print("Spec:", SPEC)
+    print("Out dir:", OUT_DIR)
+    print("Dest:", DEST)
+
     # Ensure destination is clean but keep it if unchanged
     if DEST.exists() and not DEST.is_dir():
         raise SystemExit(f"{DEST} exists and is not a directory")
