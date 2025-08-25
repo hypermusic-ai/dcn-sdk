@@ -125,10 +125,11 @@ components:
   schemas:
     VersionResponse:
       type: object
-      required: [version]
+      additionalProperties: false
+      required: [version, build_timestamp]
       properties:
         version: { type: string }
-        buildTimestamp: { type: string, description: "Optional server build timestamp" }
+        build_timestamp: { type: string}
 
     NonceResponse:
       type: object
@@ -136,7 +137,6 @@ components:
       properties:
         address: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
         nonce: { type: string }
-        expiresAt: { type: string, format: date-time, nullable: true }
 
     AuthRequest:
       type: object
@@ -187,10 +187,28 @@ components:
 
     FeatureGetResponse:
       type: object
+      additionalProperties: false
+      required: [address, dimensions, local_address, name, owner]
       properties:
+        address:
+          type: string
+          description: Lowercase hex without 0x in current server output
+          pattern: '^[a-f0-9]{40}$'
+        dimensions:
+          type: array
+          description: The list of dimensions that together define the feature.
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/FeatureDimension'
+        local_address:
+          type: string
+          description: Lowercase hex without 0x in current server output
+          pattern: '^[a-f0-9]{40}$'
         name: { type: string }
-        version: { type: string }
-        metadata: { type: object, additionalProperties: true }
+        owner:
+          type: string
+          description: Lowercase hex without 0x in current server output
+          pattern: '^[a-f0-9]{40}$'
 
     FeatureCreateRequest:
       type: object
@@ -210,7 +228,7 @@ components:
           description: The list of dimensions that together define the feature.
           minItems: 1
           items:
-            $ref: '#/components/schemas/FeatureDimensionCreateRequest'
+            $ref: '#/components/schemas/FeatureDimension'
       example:
         name: melody
         dimensions:
@@ -227,7 +245,7 @@ components:
               - name: nop
                 args: []
 
-    FeatureDimensionCreateRequest:
+    FeatureDimension:
       type: object
       description: Declares which base feature to use and the ordered transformations to apply.
       additionalProperties: false
@@ -279,10 +297,23 @@ components:
 
     TransformationGetResponse:
       type: object
+      additionalProperties: false
+      required: [address, local_address, name, owner, sol_src]
       properties:
+        address:
+          type: string
+          description: Lowercase hex without 0x in current server output
+          pattern: '^[a-f0-9]{40}$'
+        local_address:
+          type: string
+          description: Lowercase hex without 0x in current server output
+          pattern: '^[a-f0-9]{40}$'
         name: { type: string }
-        version: { type: string }
-        metadata: { type: object, additionalProperties: true }
+        owner:
+          type: string
+          description: Lowercase hex without 0x in current server output
+          pattern: '^[a-f0-9]{40}$'
+        sol_src: { type: string }
 
     TransformationCreateRequest:
       type: object

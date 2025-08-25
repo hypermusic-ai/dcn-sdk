@@ -13,7 +13,7 @@ from eth_account import Account
 from .dcn_api_client import Client as _GenClient
 from .dcn_api_client import AuthenticatedClient as _GenAuthClient
 from .dcn_api_client.models import AuthRequest, RefreshRequest, FeatureCreateRequest, TransformationCreateRequest
-from .dcn_api_client.models import AuthResponse, RefreshResponse, NonceResponse, VersionResponse, AccountResponse
+from .dcn_api_client.models import AuthResponse, RefreshResponse, NonceResponse, VersionResponse, AccountResponse, ExecuteItem
 from .dcn_api_client.models import FeatureGetResponse, TransformationGetResponse, FeatureCreateResponse, TransformationCreateResponse
 # --- local helpers ---
 from .crypto import sign_login_nonce
@@ -188,12 +188,6 @@ class Client:
         ])
         return self._call(fn, feature_name=name, feature_version=version)
 
-    def feature_post(self, req: FeatureCreateRequest) -> FeatureCreateResponse:
-        fn = _resolve_op([
-            "dcn.dcn_api_client.api.feature.post_feature",
-        ])
-        return self._call(fn, body=req)
-
     def feature_post(self, src_dict: Mapping[str, Any]) -> FeatureCreateResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.feature.post_feature",
@@ -212,12 +206,6 @@ class Client:
         ])
         return self._call(fn, transformation_name=name, transformation_version=version)
 
-    def transformation_post(self, req: TransformationCreateRequest) -> TransformationCreateResponse:
-        fn = _resolve_op([
-            "dcn.dcn_api_client.api.transformation.post_transformation",
-        ])
-        return self._call(fn, body=req)
-
     def transformation_post(self, src_dict: Mapping[str, Any]) -> TransformationCreateResponse:
         fn = _resolve_op([
             "dcn.dcn_api_client.api.transformation.post_transformation",
@@ -225,7 +213,7 @@ class Client:
         return self._call(fn, body=TransformationCreateRequest.from_dict(src_dict))
 
     # Execute
-    def execute(self, feature_name: str, num_samples: int, running_instances: Optional[List[Tuple[int, int]]] = None):
+    def execute(self, feature_name: str, num_samples: int, running_instances: Optional[List[Tuple[int, int]]] = None) -> List[ExecuteItem]:
         if running_instances:
             fn = _resolve_op([
                 "dcn.dcn_api_client.api.execute.get_execute_with_running_instances",

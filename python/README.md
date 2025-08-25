@@ -56,30 +56,6 @@ result = sdk_client.execute("melody", 64)
 result = sdk_client.execute("melody", 64, [(12,3),(1,1)])
 ```
 
-## JSON → model convenience
-
-The Python wrapper accepts plain dicts/lists and converts them to the generated model classes for you.
-
-These two calls are equivalent:
-
-```python
-# Convenient dicts
-sdk_client.feature_post({"name":"melody","dimensions":[{"feature_name":"pitch","transformations":[{"name":"add","args":[1]}]}]})
-
-# Explicit model usage (if you prefer)
-from dcn.dcn_api_client.models import FeatureCreateRequest, FeatureDimensionCreateRequest, TransformationRef
-req = FeatureCreateRequest(
-    name="melody",
-    dimensions=[
-        FeatureDimensionCreateRequest(
-            feature_name="pitch",
-            transformations=[TransformationRef(name="add", args=[1])]
-        )
-    ],
-)
-sdk_client.feature_post(req)
-```
-
 ## Code generation
 
 We use `openapi-python-client` to generate `dcn_api_client` from `spec/api.yaml`.
