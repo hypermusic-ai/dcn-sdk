@@ -2,10 +2,20 @@
 import json, os, shutil, subprocess, sys, tempfile
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]          # root
-PYTHON_DIR = ROOT / "python"
-OUT_DIR = PYTHON_DIR / "build"                      # we’ll place the project here
-DEST = PYTHON_DIR / "dcn" / "dcn_api_client"       # final importable package
+SCRIPT_DIR = Path(__file__).resolve().parent
+
+if (SCRIPT_DIR.parent / "spec" / "api.yaml").exists():
+    ROOT = SCRIPT_DIR.parent
+    PYTHON_DIR = SCRIPT_DIR
+elif (SCRIPT_DIR / "spec" / "api.yaml").exists():
+    ROOT = SCRIPT_DIR
+    PYTHON_DIR = SCRIPT_DIR
+else:
+    ROOT = SCRIPT_DIR.parent
+    PYTHON_DIR = SCRIPT_DIR
+
+OUT_DIR = PYTHON_DIR / "build"                     # we'll place the project here
+DEST = PYTHON_DIR / "dcn" / "dcn_api_client"      # final importable package
 
 CONFIG = PYTHON_DIR / "openapi-python-client.json"
 SPEC = ROOT / "spec" / "api.yaml"
