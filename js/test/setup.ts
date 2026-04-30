@@ -1,111 +1,180 @@
 import { vi, beforeEach, afterEach } from 'vitest';
 
 declare global {
-  // make TS happy when we assign to globalThis.fetch
-  // eslint-disable-next-line no-var
   var __lastRequests: Array<{ input: RequestInfo | URL; init?: RequestInit }>;
+}
+
+const ADDR = '0x1111111111111111111111111111111111111111';
+const FORMAT = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+
+function json(obj: unknown, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+async function requestJson(init?: RequestInit) {
+  return init?.body ? JSON.parse(init.body as string) : {};
 }
 
 beforeEach(() => {
   globalThis.__lastRequests = [];
 
-  // Simple router for our SDK endpoints
   globalThis.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     globalThis.__lastRequests.push({ input, init });
 
-    const url = typeof input === 'string' ? input : (input instanceof URL ? input.toString() : (input as Request).url);
+    const url = typeof input === 'string'
+      ? input
+      : input instanceof URL
+        ? input.toString()
+        : (input as Request).url;
     const method = (init?.method ?? 'GET').toUpperCase();
-    const json = (obj: unknown) =>
-      new Response(JSON.stringify(obj), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
+    const parsedUrl = new URL(url);
+    const pathname = parsedUrl.pathname;
 
-    // VERSION
-    if (url.endsWith('/version') && method === 'GET') {
-      return json({ version: '1.2.3', build_timestamp: '2025-10-01T12:34:56Z' });
+    if (pathname.endsWith('/version') && method === 'GET') {
+      return json({ version: '0.4.0', build_timestamp: '2026-04-30T00:00:00Z' });
     }
 
-    // AUTH: /nonce/{address}
-    const nonceMatch = url.match(/\/nonce\/(0x[a-fA-F0-9]{40})$/);
+    const nonceMatch = pathname.match(/\/nonce\/([^/]+)$/);
     if (nonceMatch && method === 'GET') {
-      const [, address] = nonceMatch;
-      return json({ address, nonce: 'abcd-efgh' });
+      return json({ nonce: 'abcd-efgh' });
     }
 
-    // AUTH: /auth
-    if (url.endsWith('/auth') && method === 'POST') {
-      const body = init?.body ? JSON.parse(init.body as string) : {};
-      if (body.message?.includes('abcd-efgh')) {
-        return json({ access_token: 'access-123', refresh_token: 'refresh-456' });
+    if (pathname.endsWith('/auth') && method === 'POST') {
+      const body = await requestJson(init);
+      if (body.message === 'Login nonce: abcd-efgh') {
+        return json({ access_token: 'access-123' });
       }
-      return new Response('Unauthorized', { status: 401 });
+      return json({ error: 'unauthorized' }, 400);
     }
 
-    // AUTH: /refresh
-    if (url.endsWith('/refresh') && method === 'POST') {
-      const xrt = (init?.headers as Record<string, string> | undefined)?.['X-Refresh-Token'];
-      if (xrt === 'refresh-456') {
-        return json({ access_token: 'access-789', refresh_token: 'refresh-456' });
-      }
-      return new Response('Unauthorized', { status: 401 });
+    if (pathname.endsWith('/accounts') && method === 'GET') {
+      return json({
+        limit: Number(parsedUrl.searchParams.get('limit')),
+        total_accounts: 1,
+        cursor: { has_more: false, next_after: null },
+        accounts: [ADDR],
+      });
     }
 
-    // ACCOUNT: /account/{address}
-    const acctMatch = url.match(/\/account\/(0x[a-fA-F0-9]{40})(?:\?.*)?$/);
-    if (acctMatch && method === 'GET') {
-      const [, addr] = acctMatch;
-      return json({ address: addr, total_features: 2, total_transformations: 1, items: [] });
+    const accountMatch = pathname.match(/\/account\/([^/]+)$/);
+    if (accountMatch && method === 'GET') {
+      return json({
+        address: accountMatch[1],
+        limit: Number(parsedUrl.searchParams.get('limit')),
+        owned_connectors: ['pitch'],
+        owned_transformations: ['identity'],
+        owned_conditions: ['always'],
+        cursor_connectors: { has_more: false, next_after: null },
+        cursor_transformations: { has_more: false, next_after: null },
+        cursor_conditions: { has_more: false, next_after: null },
+      });
     }
 
-    // FEATURE: GET by name/version
-    const featVer = url.match(/\/feature\/([^/]+)\/([^/]+)$/);
-    if (featVer && method === 'GET') {
-      const [, name, ver] = featVer;
-      return json({ name, version: ver, dimensions: [] });
+    const connectorMatch = pathname.match(/\/connector\/([^/]+)$/);
+    if (connectorMatch && method === 'HEAD') {
+      return new Response(null, { status: connectorMatch[1] === 'missing' ? 404 : 200 });
     }
-    const featName = url.match(/\/feature\/([^/]+)$/);
-    if (featName && method === 'GET') {
-      const [, name] = featName;
-      return json({ name, version: 'latest', dimensions: [] });
+    if (connectorMatch && method === 'GET') {
+      return json({
+        name: connectorMatch[1],
+        dimensions: [{ transformations: [{ name: 'identity', args: [] }] }],
+        condition_name: '',
+        condition_args: [],
+        owner: ADDR,
+        address: '0x0',
+        format_hash: FORMAT,
+      });
     }
-    if (url.endsWith('/feature') && method === 'POST') {
-      const body = init?.body ? JSON.parse(init.body as string) : {};
-      return json({ ...body, version: body.version ?? 'v1' });
-    }
-
-    // TRANSFORMATION: GET/POST
-    const trVer = url.match(/\/transformation\/([^/]+)\/([^/]+)$/);
-    if (trVer && method === 'GET') {
-      const [, name, ver] = trVer;
-      return json({ name, version: ver, sol_src: 'return x;' });
-    }
-    const trName = url.match(/\/transformation\/([^/]+)$/);
-    if (trName && method === 'GET') {
-      const [, name] = trName;
-      return json({ name, version: 'latest', sol_src: 'return x;' });
-    }
-    if (url.endsWith('/transformation') && method === 'POST') {
-      const body = init?.body ? JSON.parse(init.body as string) : {};
-      return json({ ...body, version: body.version ?? 'v1' });
+    if (pathname.endsWith('/connector') && method === 'POST') {
+      const body = await requestJson(init);
+      return json({ name: body.name, owner: ADDR, address: '0x0', format_hash: FORMAT }, 201);
     }
 
-    // EXECUTE (with or without running_instances)
-    const execWith = url.match(/\/execute\/([^/]+)\/(\d+)\/(\[\(.+\)\])$/);
-    if (execWith && method === 'GET') {
-      const [, feat, count, encoded] = execWith;
-      return json([
-        { feature_path: feat, count: Number(count), running: encoded, data: [1, 2, 3, 4] },
-      ]);
+    const transformationMatch = pathname.match(/\/transformation\/([^/]+)$/);
+    if (transformationMatch && method === 'HEAD') {
+      return new Response(null, { status: transformationMatch[1] === 'missing' ? 404 : 200 });
     }
-    const execNo = url.match(/\/execute\/([^/]+)\/(\d+)$/);
-    if (execNo && method === 'GET') {
-      const [, feat, count] = execNo;
-      return json([{ feature_path: feat, count: Number(count), data: [9, 8, 7] }]);
+    if (transformationMatch && method === 'GET') {
+      return json({ name: transformationMatch[1], owner: ADDR, address: '0x0', sol_src: 'return x;' });
+    }
+    if (pathname.endsWith('/transformation') && method === 'POST') {
+      const body = await requestJson(init);
+      return json({ name: body.name, owner: ADDR, address: '0x0' }, 201);
     }
 
-    // default 404 for unknown
-    return new Response('Not Found', { status: 404 });
+    const conditionMatch = pathname.match(/\/condition\/([^/]+)$/);
+    if (conditionMatch && method === 'HEAD') {
+      return new Response(null, { status: conditionMatch[1] === 'missing' ? 404 : 200 });
+    }
+    if (conditionMatch && method === 'GET') {
+      return json({ name: conditionMatch[1], owner: ADDR, address: '0x0', sol_src: 'return true;' });
+    }
+    if (pathname.endsWith('/condition') && method === 'POST') {
+      const body = await requestJson(init);
+      return json({ name: body.name, owner: ADDR, address: '0x0' }, 201);
+    }
+
+    if (pathname.endsWith('/execute') && method === 'POST') {
+      const body = await requestJson(init);
+      return json([{ path: `/${body.connector_name}`, data: [1, 2, 3] }]);
+    }
+
+    if (pathname.endsWith('/formats') && method === 'GET') {
+      return json({
+        limit: Number(parsedUrl.searchParams.get('limit')),
+        total_formats: 1,
+        cursor: { has_more: false, next_after: null },
+        formats: [FORMAT],
+      });
+    }
+
+    const formatMatch = pathname.match(/\/format\/([^/]+)$/);
+    if (formatMatch && method === 'GET') {
+      return json({
+        format_hash: formatMatch[1],
+        limit: Number(parsedUrl.searchParams.get('limit')),
+        total_connectors: 1,
+        cursor: { has_more: false, next_after: null },
+        scalars: ['scalar:0'],
+        connectors: ['pitch'],
+      });
+    }
+
+    if (pathname.endsWith('/feed') && method === 'GET') {
+      return json({
+        limit: Number(parsedUrl.searchParams.get('limit')),
+        cursor: { has_more: false, next_before: null },
+        items: [
+          {
+            feed_id: 'eth:1:connector_added:pitch',
+            event_type: 'connector_added',
+            status: 'finalized',
+            visible: true,
+            tx_hash: '0xabc',
+            block_number: 1,
+            tx_index: 0,
+            log_index: 0,
+            history_cursor: 'cursor',
+            created_at_ms: 1,
+            updated_at_ms: 1,
+            projector_version: 1,
+            payload: { type: 'connector', name: 'pitch', owner: ADDR },
+          },
+        ],
+      });
+    }
+
+    if (pathname.endsWith('/feed/stream') && method === 'GET') {
+      return new Response('event: stream_meta\ndata: {"has_more":false}\n\n', {
+        status: 200,
+        headers: { 'Content-Type': 'text/event-stream' },
+      });
+    }
+
+    return json({ error: 'not_found', path: pathname }, 404);
   });
 });
 

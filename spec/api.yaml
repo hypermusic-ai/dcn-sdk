@@ -1,20 +1,25 @@
 openapi: 3.0.3
 info:
-  title: DCN Public API
-  version: 1.0.0
+  title: DCN Chain API
+  version: 0.2.0
   description: |
-    Contract generated from route list. Optional (~) path parts are split into separate paths.
+    Public chain API for the Decentralized Creative Network.
 
 servers:
-  - url: https://api.decentralised.art
+  - url: https://api.decentralised.art/chain
+
+security: []
 
 tags:
-  - name: version
+  - name: core
   - name: auth
   - name: account
-  - name: feature
+  - name: connector
   - name: transformation
-  - name: execute
+  - name: condition
+  - name: format
+  - name: feed
+  - name: runner
 
 components:
   securitySchemes:
@@ -24,554 +29,826 @@ components:
       bearerFormat: JWT
 
   parameters:
-    RefreshTokenHeader:
-      name: X-Refresh-Token
-      in: header
-      required: true
-      description: Refresh token used to obtain a new access token.
-      schema:
-        type: string
-    EthAddress:
+    AddressPath:
       name: address
       in: path
       required: true
-      description: Ethereum address (0x + 40 hex)
-      schema:
-        type: string
-        pattern: '^0x[a-fA-F0-9]{40}$'
+      description: Ethereum-style address, with or without a 0x prefix.
+      schema: { $ref: "#/components/schemas/Address" }
+    NamePath:
+      name: name
+      in: path
+      required: true
+      schema: { type: string, minLength: 1 }
+    FormatHashPath:
+      name: hash
+      in: path
+      required: true
+      schema: { $ref: "#/components/schemas/FormatHash" }
     Limit:
       name: limit
       in: query
-      required: false
-      schema: { type: integer, minimum: 1, maximum: 200, default: 50 }
-    Page:
-      name: page
+      required: true
+      schema: { type: integer, minimum: 1, maximum: 256, default: 50 }
+    After:
+      name: after
       in: query
       required: false
-      schema: { type: integer, minimum: 0, default: 0 }
-    FeatureName:
-      name: featureName
-      in: path
-      required: true
-      schema: { type: string, minLength: 1 }
-    FeatureVersion:
-      name: featureVersion
-      in: path
-      required: true
-      description: Feature version (opaque, no '/')
-      schema: { type: string, pattern: '^[^/]+$' }
-    TransformationName:
-      name: transformationName
-      in: path
-      required: true
-      schema: { type: string, minLength: 1 }
-    TransformationVersion:
-      name: transformationVersion
-      in: path
-      required: true
-      description: Transformation version (opaque, no '/')
-      schema: { type: string, pattern: '^[^/]+$' }
-    NumSamples:
-      name: numSamples
-      in: path
-      required: true
-      description: Number of samples (N)
-      schema: { type: integer, minimum: 1 }
-    RunningInstances:
-      name: running_instances
-      in: path
-      required: true
-      description: >
-        One or more tuples encoded inline, e.g. `(0;12)(512;24)`.
-        Each tuple is `(startPoint;transformationShift)`.
-      schema:
-        type: string
-        # allow one or more "(n;n)" inside square brackets, commas optional
-        pattern: '^\[(\(\d+;\d+\))(?:,?(\(\d+;\d+\)))*\]$'
-        example: "[(0;0)]"
+      schema: { type: string }
 
   responses:
     BadRequest:
-      description: Bad request
+      description: Bad request.
       content:
         application/json:
-          schema:
-            type: object
-            required: [error, message]
-            properties:
-              error: { type: string }
-              message: { type: string }
+          schema: { $ref: "#/components/schemas/Error" }
     Unauthorized:
-      description: Unauthorized
+      description: Unauthorized.
       content:
         application/json:
-          schema:
-            type: object
-            required: [error, message]
-            properties:
-              error: { type: string }
-              message: { type: string }
+          schema: { $ref: "#/components/schemas/Error" }
     NotFound:
-      description: Not found
+      description: Not found.
       content:
         application/json:
-          schema:
-            type: object
-            required: [error, message]
-            properties:
-              error: { type: string }
-              message: { type: string }
+          schema: { $ref: "#/components/schemas/Error" }
+    ServerError:
+      description: Internal server error.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
 
   schemas:
+    Error:
+      type: object
+      additionalProperties: true
+      properties:
+        error: { type: string }
+        message: { type: string }
+
+    Address:
+      type: string
+      description: Ethereum-style address, with or without a 0x prefix.
+      pattern: "^(0x)?[a-fA-F0-9]{40}$"
+
+    FormatHash:
+      type: string
+      description: 32-byte connector format hash, with or without a 0x prefix.
+      pattern: "^(0x)?[a-fA-F0-9]{64}$"
+
+    NameCursorState:
+      type: object
+      additionalProperties: false
+      required: [has_more, next_after]
+      properties:
+        has_more: { type: boolean }
+        next_after: { type: string, nullable: true }
+
+    AddressCursorState:
+      type: object
+      additionalProperties: false
+      required: [has_more, next_after]
+      properties:
+        has_more: { type: boolean }
+        next_after:
+          type: string
+          nullable: true
+          pattern: "^(0x)?[a-fA-F0-9]{40}$"
+
+    FormatHashCursorState:
+      type: object
+      additionalProperties: false
+      required: [has_more, next_after]
+      properties:
+        has_more: { type: boolean }
+        next_after:
+          type: string
+          nullable: true
+          pattern: "^(0x)?[a-fA-F0-9]{64}$"
+
     VersionResponse:
       type: object
       additionalProperties: false
-      required: [version, build_timestamp]
+      required: [build_timestamp, version]
       properties:
+        build_timestamp: { type: string }
         version: { type: string }
-        build_timestamp: { type: string}
 
     NonceResponse:
       type: object
+      additionalProperties: false
       required: [nonce]
       properties:
-        address: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
         nonce: { type: string }
 
     AuthRequest:
       type: object
+      additionalProperties: false
       required: [address, message, signature]
       properties:
-        address: { type: string, pattern: '^0x[a-fA-F0-9]{40}$' }
-        message: { type: string }
-        signature: { type: string, description: "Hex ECDSA signature of message" }
+        address: { $ref: "#/components/schemas/Address" }
+        message:
+          type: string
+          description: "Must be `Login nonce: <nonce>`."
+        signature: { type: string }
 
     AuthResponse:
       type: object
-      required: [access_token, refresh_token]
-      properties:
-        access_token: { type: string }
-        refresh_token: { type: string }
-
-    RefreshRequest:
-      type: object
-      description: May be empty; tokens can be provided via headers.
       additionalProperties: false
-
-    RefreshResponse:
-      type: object
       required: [access_token]
       properties:
         access_token: { type: string }
-        refresh_token: { type: string, nullable: true }
 
-    AccountResponse:
+    AccountListResponse:
       type: object
       additionalProperties: false
-      required: [page, limit]
+      required: [limit, total_accounts, cursor, accounts]
       properties:
-        address:
-          type: string
-          description: Lowercase hex without 0x in current server output
-          pattern: '^[a-f0-9]{40}$'
-        limit: { type: integer, minimum: 1 }
-        page:  { type: integer, minimum: 0 }
-        total_features: { type: integer, minimum: 0 }
-        total_transformations: { type: integer, minimum: 0 }
-        owned_features:
+        limit: { type: integer, minimum: 1, maximum: 256 }
+        total_accounts: { type: integer, minimum: 0 }
+        cursor: { $ref: "#/components/schemas/AddressCursorState" }
+        accounts:
+          type: array
+          items: { $ref: "#/components/schemas/Address" }
+
+    AccountInfoResponse:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          address,
+          limit,
+          owned_connectors,
+          owned_transformations,
+          owned_conditions,
+          cursor_connectors,
+          cursor_transformations,
+          cursor_conditions,
+        ]
+      properties:
+        address: { $ref: "#/components/schemas/Address" }
+        limit: { type: integer, minimum: 1, maximum: 256 }
+        owned_connectors:
           type: array
           items: { type: string }
         owned_transformations:
           type: array
           items: { type: string }
+        owned_conditions:
+          type: array
+          items: { type: string }
+        cursor_connectors: { $ref: "#/components/schemas/NameCursorState" }
+        cursor_transformations: { $ref: "#/components/schemas/NameCursorState" }
+        cursor_conditions: { $ref: "#/components/schemas/NameCursorState" }
 
-    FeatureGetResponse:
+    TransformationCallDef:
       type: object
       additionalProperties: false
-      required: [address, dimensions, local_address, name, owner]
+      required: [name]
       properties:
-        address:
-          type: string
-          description: Lowercase hex without 0x in current server output
-          pattern: '^[a-f0-9]{40}$'
-        dimensions:
-          type: array
-          description: The list of dimensions that together define the feature.
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/FeatureDimension'
-        local_address:
-          type: string
-          description: Lowercase hex without 0x in current server output
-          pattern: '^[a-f0-9]{40}$'
         name: { type: string }
-        owner:
-          type: string
-          description: Lowercase hex without 0x in current server output
-          pattern: '^[a-f0-9]{40}$'
-
-    FeatureCreateRequest:
-      type: object
-      description: Request payload to create a new feature definition composed of multiple dimensions.
-      additionalProperties: false
-      required: [name, dimensions]
-      properties:
-        name:
-          type: string
-          description: Unique feature name.
-          minLength: 1
-          maxLength: 64
-          pattern: '^[A-Za-z_][A-Za-z0-9_\-]*$'
-          example: melody
-        dimensions:
-          type: array
-          description: The list of dimensions that together define the feature.
-          minItems: 1
-          items:
-            $ref: '#/components/schemas/FeatureDimension'
-      example:
-        name: melody
-        dimensions:
-          - feature_name: pitch
-            transformations:
-              - name: add
-                args: [1]
-              - name: mul
-                args: [2]
-          - feature_name: time
-            transformations: []
-          - feature_name: rythm
-            transformations:
-              - name: nop
-                args: []
-
-    FeatureDimension:
-      type: object
-      description: Declares which base feature to use and the ordered transformations to apply.
-      additionalProperties: false
-      required: [feature_name, transformations]
-      properties:
-        feature_name:
-          type: string
-          description: The base feature name (e.g., "pitch", "time", "rythm").
-          minLength: 1
-          pattern: '^[A-Za-z_][A-Za-z0-9_\-]*$'
-          example: pitch
-        transformations:
-          type: array
-          description: Ordered list of transformations (by name) with positional args.
-          items:
-            $ref: '#/components/schemas/TransformationRef'
-          example:
-            - name: add
-              args: [1]
-            - name: mul
-              args: [2]
-
-    TransformationRef:
-      type: object
-      description: Reference to a previously registered transformation, with positional numeric args.
-      additionalProperties: false
-      required: [name, args]
-      properties:
-        name:
-          type: string
-          description: Name of a registered transformation to invoke.
-          minLength: 1
-          pattern: '^[A-Za-z_][A-Za-z0-9_\-]*$'
-          example: add
         args:
           type: array
-          description: Positional numeric arguments (empty for no-arg transformations like "nop").
-          minItems: 0
-          items:
-            type: number
-          example: [1]
+          items: { type: integer }
 
-
-    FeatureCreateResponse:
-      type: object
-      properties:
-        txHash: { type: string }
-        resource: { $ref: '#/components/schemas/FeatureGetResponse' }
-
-    TransformationGetResponse:
+    RunningInstance:
       type: object
       additionalProperties: false
-      required: [address, local_address, name, owner, sol_src]
+      required: [start_point, transformation_shift]
       properties:
+        start_point:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+        transformation_shift:
+          type: integer
+          minimum: 0
+          maximum: 4294967295
+
+    ConnectorDimension:
+      type: object
+      additionalProperties: false
+      required: [transformations]
+      properties:
+        transformations:
+          type: array
+          items: { $ref: "#/components/schemas/TransformationCallDef" }
+        composite:
+          type: string
+          description: Connected composite connector name. Omitted or empty means none.
+        bindings:
+          type: object
+          additionalProperties: { type: string }
+
+    ConnectorInfoResponse:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          name,
+          dimensions,
+          condition_name,
+          condition_args,
+          owner,
+          address,
+          format_hash,
+        ]
+      properties:
+        name: { type: string }
+        dimensions:
+          type: array
+          items: { $ref: "#/components/schemas/ConnectorDimension" }
+        condition_name: { type: string }
+        condition_args:
+          type: array
+          items: { type: integer }
+        static_ri:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/RunningInstance" }
+        owner: { $ref: "#/components/schemas/Address" }
         address:
           type: string
-          description: Lowercase hex without 0x in current server output
-          pattern: '^[a-f0-9]{40}$'
-        local_address:
-          type: string
-          description: Lowercase hex without 0x in current server output
-          pattern: '^[a-f0-9]{40}$'
+          description: Deployed address placeholder, currently often `0x0`.
+        format_hash: { type: string }
+
+    CreateConnectorRequest:
+      type: object
+      additionalProperties: false
+      required: [name, dimensions, condition_name, condition_args]
+      properties:
         name: { type: string }
-        owner:
-          type: string
-          description: Lowercase hex without 0x in current server output
-          pattern: '^[a-f0-9]{40}$'
+        dimensions:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/ConnectorDimension" }
+        condition_name: { type: string }
+        condition_args:
+          type: array
+          items: { type: integer }
+        static_ri:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/RunningInstance" }
+
+    CreateConnectorResponse:
+      type: object
+      additionalProperties: false
+      required: [name, owner, address, format_hash]
+      properties:
+        name: { type: string }
+        owner: { $ref: "#/components/schemas/Address" }
+        address: { type: string }
+        format_hash: { type: string }
+
+    TransformationInfoResponse:
+      type: object
+      additionalProperties: false
+      required: [address, owner, name, sol_src]
+      properties:
+        address: { type: string }
+        owner: { $ref: "#/components/schemas/Address" }
+        name: { type: string }
         sol_src: { type: string }
 
-    TransformationCreateRequest:
+    CreateTransformationRequest:
       type: object
-      description: Define/register a transformation by name and its Solidity source.
       additionalProperties: false
       required: [name, sol_src]
       properties:
-        name:
-          type: string
-          description: Unique transformation identifier (e.g., "add", "mul", "nop").
-          minLength: 1
-          pattern: '^[A-Za-z_][A-Za-z0-9_\-]*$'
-          example: add
-        sol_src:
-          type: string
-          description: Solidity-like snippet implementing the transformation. Receives (x, args).
-          example: "return x + args[0];"
+        name: { type: string }
+        sol_src: { type: string }
 
-    TransformationCreateResponse:
-      type: object
-      properties:
-        txHash: { type: string }
-        resource: { $ref: '#/components/schemas/TransformationGetResponse' }
-
-    ExecuteItem:
+    CreateTransformationResponse:
       type: object
       additionalProperties: false
-      required: [feature_path, data]
+      required: [name, owner, address]
       properties:
-        feature_path:
-          type: string
-          description: Feature sub-path that produced this series.
+        name: { type: string }
+        owner: { $ref: "#/components/schemas/Address" }
+        address: { type: string }
+
+    ConditionInfoResponse:
+      type: object
+      additionalProperties: false
+      required: [address, owner, name, sol_src]
+      properties:
+        address: { type: string }
+        owner: { $ref: "#/components/schemas/Address" }
+        name: { type: string }
+        sol_src: { type: string }
+
+    CreateConditionRequest:
+      type: object
+      additionalProperties: false
+      required: [name, sol_src]
+      properties:
+        name: { type: string }
+        sol_src: { type: string }
+
+    CreateConditionResponse:
+      type: object
+      additionalProperties: false
+      required: [name, owner, address]
+      properties:
+        name: { type: string }
+        owner: { $ref: "#/components/schemas/Address" }
+        address: { type: string }
+
+    ExecuteRequest:
+      type: object
+      additionalProperties: false
+      required: [connector_name, particles_count]
+      properties:
+        connector_name: { type: string }
+        particles_count:
+          oneOf:
+            - type: integer
+              minimum: 0
+              maximum: 65536
+            - type: string
+              pattern: "^(0|[1-9][0-9]*)$"
+        dynamic_ri:
+          type: object
+          additionalProperties: { $ref: "#/components/schemas/RunningInstance" }
+
+    ParticlesResultItem:
+      type: object
+      additionalProperties: false
+      required: [path, data]
+      properties:
+        path: { type: string }
         data:
           type: array
           items: { type: integer }
 
     ExecuteResponse:
       type: array
-      items: { $ref: '#/components/schemas/ExecuteItem' }
+      items: { $ref: "#/components/schemas/ParticlesResultItem" }
+
+    FormatListResponse:
+      type: object
+      additionalProperties: false
+      required: [limit, total_formats, cursor, formats]
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 256 }
+        total_formats: { type: integer, minimum: 0 }
+        cursor: { $ref: "#/components/schemas/FormatHashCursorState" }
+        formats:
+          type: array
+          items: { $ref: "#/components/schemas/FormatHash" }
+
+    FormatInfoResponse:
+      type: object
+      additionalProperties: false
+      required: [format_hash, limit, total_connectors, cursor, scalars, connectors]
+      properties:
+        format_hash: { $ref: "#/components/schemas/FormatHash" }
+        limit: { type: integer, minimum: 1, maximum: 256 }
+        total_connectors: { type: integer, minimum: 0 }
+        cursor: { $ref: "#/components/schemas/NameCursorState" }
+        scalars:
+          type: array
+          items: { type: string }
+        connectors:
+          type: array
+          items: { type: string }
+
+    FeedEventType:
+      type: string
+      enum: [connector_added, transformation_added, condition_added]
+
+    FeedEventStatus:
+      type: string
+      enum: [observed, safe, finalized, removed]
+
+    FeedEventPayload:
+      type: object
+      additionalProperties: true
+      required: [type, name, owner]
+      properties:
+        type:
+          type: string
+          enum: [connector, transformation, condition]
+        name: { type: string }
+        owner: { $ref: "#/components/schemas/Address" }
+
+    FeedItem:
+      type: object
+      additionalProperties: false
+      required:
+        [
+          feed_id,
+          event_type,
+          status,
+          visible,
+          tx_hash,
+          block_number,
+          tx_index,
+          log_index,
+          history_cursor,
+          created_at_ms,
+          updated_at_ms,
+          projector_version,
+          payload,
+        ]
+      properties:
+        feed_id: { type: string }
+        event_type: { $ref: "#/components/schemas/FeedEventType" }
+        status: { $ref: "#/components/schemas/FeedEventStatus" }
+        visible: { type: boolean }
+        tx_hash: { type: string }
+        block_number: { type: integer, format: int64, minimum: 0 }
+        tx_index: { type: integer, format: int64, minimum: 0 }
+        log_index: { type: integer, format: int64, minimum: 0 }
+        history_cursor: { type: string }
+        created_at_ms: { type: integer, format: int64, minimum: 0 }
+        updated_at_ms: { type: integer, format: int64, minimum: 0 }
+        projector_version: { type: integer, minimum: 1 }
+        payload: { $ref: "#/components/schemas/FeedEventPayload" }
+
+    FeedCursor:
+      type: object
+      additionalProperties: false
+      required: [has_more, next_before]
+      properties:
+        has_more: { type: boolean }
+        next_before: { type: string, nullable: true }
+
+    FeedPage:
+      type: object
+      additionalProperties: false
+      required: [limit, cursor, items]
+      properties:
+        limit: { type: integer, minimum: 1, maximum: 256 }
+        cursor: { $ref: "#/components/schemas/FeedCursor" }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FeedItem" }
+
+    FeedStreamDelta:
+      type: object
+      additionalProperties: false
+      required: [stream_seq, event_type, status, feed_id, history_cursor, created_at_ms, payload]
+      properties:
+        stream_seq: { type: integer, format: int64, minimum: 0 }
+        event_type: { $ref: "#/components/schemas/FeedEventType" }
+        status: { $ref: "#/components/schemas/FeedEventStatus" }
+        feed_id: { type: string }
+        history_cursor: { type: string }
+        created_at_ms: { type: integer, format: int64, minimum: 0 }
+        payload: { $ref: "#/components/schemas/FeedEventPayload" }
+
+    FeedStreamMeta:
+      type: object
+      additionalProperties: false
+      required:
+        [has_more, last_seq, requested_since_seq, min_available_seq, replay_floor_seq, stale_since_seq]
+      properties:
+        has_more: { type: boolean }
+        last_seq: { type: integer, format: int64, minimum: 0, nullable: true }
+        requested_since_seq: { type: integer, format: int64, minimum: 0 }
+        min_available_seq: { type: integer, format: int64, minimum: 0 }
+        replay_floor_seq: { type: integer, format: int64, minimum: 0 }
+        stale_since_seq: { type: boolean }
 
 paths:
   /version:
     get:
-      tags: [version]
+      tags: [core]
       operationId: get_version
-      summary: Get API version
+      summary: Get server version
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Version info.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/VersionResponse' }
+              schema: { $ref: "#/components/schemas/VersionResponse" }
 
   /nonce/{address}:
     get:
       tags: [auth]
       operationId: get_nonce
-      summary: Get a login nonce for an Ethereum address
+      summary: Get login nonce
       parameters:
-        - $ref: '#/components/parameters/EthAddress'
+        - $ref: "#/components/parameters/AddressPath"
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Nonce.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/NonceResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
+              schema: { $ref: "#/components/schemas/NonceResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
 
   /auth:
     post:
       tags: [auth]
       operationId: post_auth
-      summary: Authenticate using signed message
+      summary: Authenticate
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/AuthRequest' }
+            schema: { $ref: "#/components/schemas/AuthRequest" }
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Authenticated.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AuthResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/AuthResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
 
-  /refresh:
-    post:
-      tags: [auth]
-      operationId: post_refresh
-      summary: Refresh an access token
+  /accounts:
+    get:
+      tags: [account]
+      operationId: get_accounts
+      summary: List accounts
       parameters:
-        - $ref: '#/components/parameters/RefreshTokenHeader'
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: '#/components/schemas/RefreshRequest' }
+        - $ref: "#/components/parameters/Limit"
+        - name: after
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/Address" }
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Account page.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/RefreshResponse' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/AccountListResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
 
   /account/{address}:
     get:
       tags: [account]
-      operationId: get_account_info
-      summary: Get account info (paged)
+      operationId: get_account
+      summary: Get account ownership
       parameters:
-        - $ref: '#/components/parameters/EthAddress'
-        - $ref: '#/components/parameters/Limit'
-        - $ref: '#/components/parameters/Page'
+        - $ref: "#/components/parameters/AddressPath"
+        - $ref: "#/components/parameters/Limit"
+        - name: after_connectors
+          in: query
+          required: false
+          schema: { type: string }
+        - name: after_transformations
+          in: query
+          required: false
+          schema: { type: string }
+        - name: after_conditions
+          in: query
+          required: false
+          schema: { type: string }
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Account ownership.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/AccountResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/AccountInfoResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
 
-  /feature/{featureName}:
+  /connector/{name}:
+    head:
+      tags: [connector]
+      operationId: head_connector
+      summary: Check connector existence
+      parameters:
+        - $ref: "#/components/parameters/NamePath"
+      responses:
+        "200": { description: Exists. }
+        "404": { description: Not found. }
     get:
-      tags: [feature]
-      operationId: get_feature_by_name
-      summary: Get feature by name (latest / summary)
+      tags: [connector]
+      operationId: get_connector
+      summary: Get connector
       parameters:
-        - $ref: '#/components/parameters/FeatureName'
+        - $ref: "#/components/parameters/NamePath"
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Connector info.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/FeatureGetResponse' }
+              schema: { $ref: "#/components/schemas/ConnectorInfoResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
 
-  /feature/{featureName}/{featureVersion}:
-    get:
-      tags: [feature]
-      operationId: get_feature_by_name_version
-      summary: Get a specific feature version
-      parameters:
-        - $ref: '#/components/parameters/FeatureName'
-        - $ref: '#/components/parameters/FeatureVersion'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/FeatureGetResponse' }
-        '404': { $ref: '#/components/responses/NotFound' }
-
-  /feature:
+  /connector:
     post:
-      tags: [feature]
-      operationId: post_feature
-      summary: Create/Publish a feature
+      tags: [connector]
+      operationId: post_connector
+      summary: Publish connector
       security:
         - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/FeatureCreateRequest' }
+            schema: { $ref: "#/components/schemas/CreateConnectorRequest" }
       responses:
-        '201':
-          description: Created
+        "201":
+          description: Published.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/FeatureCreateResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/CreateConnectorResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "500": { $ref: "#/components/responses/ServerError" }
 
-  /transformation/{transformationName}:
+  /transformation/{name}:
+    head:
+      tags: [transformation]
+      operationId: head_transformation
+      summary: Check transformation existence
+      parameters:
+        - $ref: "#/components/parameters/NamePath"
+      responses:
+        "200": { description: Exists. }
+        "404": { description: Not found. }
     get:
       tags: [transformation]
-      operationId: get_transformation_by_name
-      summary: Get transformation by name (latest / summary)
+      operationId: get_transformation
+      summary: Get transformation
       parameters:
-        - $ref: '#/components/parameters/TransformationName'
+        - $ref: "#/components/parameters/NamePath"
       responses:
-        '200':
-          description: OK
+        "200":
+          description: Transformation info.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TransformationGetResponse' }
-
-  /transformation/{transformationName}/{transformationVersion}:
-    get:
-      tags: [transformation]
-      operationId: get_transformation_by_name_version
-      summary: Get a specific transformation version
-      parameters:
-        - $ref: '#/components/parameters/TransformationName'
-        - $ref: '#/components/parameters/TransformationVersion'
-      responses:
-        '200':
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: '#/components/schemas/TransformationGetResponse' }
-        '404': { $ref: '#/components/responses/NotFound' }
+              schema: { $ref: "#/components/schemas/TransformationInfoResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
 
   /transformation:
     post:
       tags: [transformation]
       operationId: post_transformation
-      summary: Create/Publish a transformation
+      summary: Publish transformation
       security:
         - bearerAuth: []
       requestBody:
         required: true
         content:
           application/json:
-            schema: { $ref: '#/components/schemas/TransformationCreateRequest' }
+            schema: { $ref: "#/components/schemas/CreateTransformationRequest" }
       responses:
-        '201':
-          description: Created
+        "201":
+          description: Published.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TransformationCreateResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/CreateTransformationResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
 
-  /execute/{featureName}/{numSamples}:
-    get:
-      tags: [execute]
-      operationId: get_execute_no_running_instances
-      summary: Execute feature without running instances
+  /condition/{name}:
+    head:
+      tags: [condition]
+      operationId: head_condition
+      summary: Check condition existence
       parameters:
-        - $ref: '#/components/parameters/FeatureName'
-        - $ref: '#/components/parameters/NumSamples'
+        - $ref: "#/components/parameters/NamePath"
       responses:
-        '200':
-          description: OK
+        "200": { description: Exists. }
+        "404": { description: Not found. }
+    get:
+      tags: [condition]
+      operationId: get_condition
+      summary: Get condition
+      parameters:
+        - $ref: "#/components/parameters/NamePath"
+      responses:
+        "200":
+          description: Condition info.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ExecuteResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/ConditionInfoResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
 
-  /execute/{featureName}/{numSamples}/{running_instances}:
-    get:
-      tags: [execute]
-      operationId: get_execute_with_running_instances
-      summary: Execute feature with running instances
-      parameters:
-        - $ref: '#/components/parameters/FeatureName'
-        - $ref: '#/components/parameters/NumSamples'
-        - $ref: '#/components/parameters/RunningInstances'
+  /condition:
+    post:
+      tags: [condition]
+      operationId: post_condition
+      summary: Publish condition
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CreateConditionRequest" }
       responses:
-        '200':
-          description: OK
+        "201":
+          description: Published.
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/ExecuteResponse' }
-        '400': { $ref: '#/components/responses/BadRequest' }
-        '401': { $ref: '#/components/responses/Unauthorized' }
+              schema: { $ref: "#/components/schemas/CreateConditionResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  /execute:
+    post:
+      tags: [runner]
+      operationId: post_execute
+      summary: Execute connector
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ExecuteRequest" }
+      responses:
+        "200":
+          description: Executed.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ExecuteResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "500": { $ref: "#/components/responses/ServerError" }
+
+  /formats:
+    get:
+      tags: [format]
+      operationId: get_formats
+      summary: List format hashes
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - name: after
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/FormatHash" }
+      responses:
+        "200":
+          description: Format hash page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FormatListResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /format/{hash}:
+    get:
+      tags: [format]
+      operationId: get_format
+      summary: Get format membership
+      parameters:
+        - $ref: "#/components/parameters/FormatHashPath"
+        - $ref: "#/components/parameters/Limit"
+        - $ref: "#/components/parameters/After"
+      responses:
+        "200":
+          description: Format membership.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FormatInfoResponse" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /feed:
+    get:
+      tags: [feed]
+      operationId: get_feed
+      summary: List feed items
+      parameters:
+        - $ref: "#/components/parameters/Limit"
+        - name: before
+          in: query
+          required: false
+          schema: { type: string }
+        - name: type
+          in: query
+          required: false
+          schema: { $ref: "#/components/schemas/FeedEventType" }
+        - name: include_unfinalized
+          in: query
+          required: false
+          schema: { type: integer, enum: [0, 1] }
+      responses:
+        "200":
+          description: Feed page.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FeedPage" }
+        "400": { $ref: "#/components/responses/BadRequest" }
+
+  /feed/stream:
+    get:
+      tags: [feed]
+      operationId: get_feed_stream
+      summary: Stream feed deltas
+      parameters:
+        - name: since_seq
+          in: query
+          required: false
+          schema: { type: integer, format: int64, minimum: 0, default: 0 }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 2048, default: 200 }
+      responses:
+        "200":
+          description: Server-Sent Events stream.
+          content:
+            text/event-stream:
+              schema: { type: string }
+        "400": { $ref: "#/components/responses/BadRequest" }

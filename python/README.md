@@ -1,81 +1,49 @@
 # Python DCN SDK
 
-## Quickstart
+## Quick Start
 
 ```python
 from eth_account import Account
 import dcn
 
-# Create an ephemeral account (or use your own private key)
-acct = Account.create()
+sdk = dcn.Client()  # https://api.decentralised.art/chain
 
-# Client points to the public DCN API by default:
-# https://api.decentralised.art
-sdk_client = dcn.Client()
+version = sdk.version()
+print(version["version"], version["build_timestamp"])
 
-# Read API server version
-version = sdk_client.version()
+connector = sdk.connector_get("pitch")
+print(connector["format_hash"])
 
-# Get account information
-acc_info = sdk_client.account_info("a616c5cb71e76c253808d90daba4540bfe6cc863", limit = 10, page = 1)
+feed = sdk.feed(limit=10, include_unfinalized=True)
+print([item["payload"]["name"] for item in feed["items"]])
 
-# Obtain feature data
-feature_info = sdk_client.feature_get("pitch")
+account = Account.create()
+sdk.login_with_account(account)
 
-# Obtain transformation data
-transform_info = sdk_client.transformation_get("mul")
-
-# Authenticate (nonce + ECDSA sign under the hood)
-sdk_client.login_with_account(acct)
-
-# Create a transformation, need to be logged first
-sdk_client.transformation_post({
-    "name": "add",
-    "sol_src": "return x + args[0];"
-})
-
-# Create a feature with dimensions & transformations, need to be logged first
-sdk_client.feature_post({
-  "name": "melody",
-  "dimensions": [
-    {
-      "feature_name": "pitch",
-      "transformations": [
-        {"name": "add", "args": [1]},
-        {"name": "mul", "args": [2]}
-      ]
-    },
-    {"feature_name": "time", "transformations": []}
-  ]
-})
-
-# Execute a feature for N samples, need to be logged first
-result = sdk_client.execute("melody", 64)
-
-# Execute a feature for N samples with Running Instances, need to be logged first
-result = sdk_client.execute("melody", 64, [(12,3),(1,1)])
+result = sdk.execute(
+    "pitch",
+    8,
+    {"0": {"start_point": 12, "transformation_shift": 3}},
+)
+print(result)
 ```
 
-## Code generation
+The SDK defaults to the chain API base URL, `https://api.decentralised.art/chain`.
+Set `DCN_API_BASE` or pass `Client(base_url=...)` to target another chain API.
 
-We use `openapi-python-client` to generate `dcn_api_client` from `spec/api.yaml`.
+## Code Generation
 
-Automatic during pip build via `python/hatch_build.py`
-
-Manual (from `/python` directory):
+The package keeps `spec/api.yaml` as an aggregate OpenAPI contract. Generated
+clients can be regenerated manually:
 
 ```bash
-pipx install openapi-python-client
 cd python
 python gen_client.py
 ```
 
-This regenerates the client into `python/dcn/dcn_api_client`
-
 ## Testing
-
-To install test target run:
 
 ```bash
 pip install -e '.[test]'
+python -m unittest discover -s tests -p 'test_*.py' -v
 ```

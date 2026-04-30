@@ -1,348 +1,360 @@
-# tests/test_client_unittest.py
 from __future__ import annotations
 
-import os
+import json
 import sys
-import types
 import unittest
 from types import ModuleType, SimpleNamespace
 from unittest.mock import patch
 
 import httpx
 
-# Ensure eth_account import in dcn.client won't fail (used only for typing here)
 try:
     import eth_account  # type: ignore
-except Exception:  # pragma: no cover
+except Exception:
     eth_account = ModuleType("eth_account")
+    eth_account_messages = ModuleType("eth_account.messages")
+
     class Account: ...
+
+    eth_account_messages.encode_defunct = lambda text: text
     eth_account.Account = Account
     sys.modules["eth_account"] = eth_account
+    sys.modules["eth_account.messages"] = eth_account_messages
+
+from dcn.client import Client, DcnApiError
+
+ADDR = "0x1111111111111111111111111111111111111111"
+FORMAT = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 
 
-# ---------- Helpers to stub the generated client & ops ----------
-
-class FakeClient:
-    def __init__(self, *, base_url: str, verify_ssl: bool, timeout: float):
-        self.base_url = base_url
-        self.verify_ssl = verify_ssl
-        self.timeout = timeout
-        self.client = httpx.Client()
-
-class FakeAuthClient(FakeClient):
-    def __init__(self, *, base_url: str, token: str, verify_ssl: bool, timeout: float):
-        super().__init__(base_url=base_url, verify_ssl=verify_ssl, timeout=timeout)
-        self.token = token
-
-def make_sync_module(handler):
-    """
-    Create a module exposing a 'sync(client=..., **kwargs)' function that dispatches to handler.
-    """
-    m = ModuleType("op_sync")
-    m.calls = []
-    def sync(*, client, **kwargs):
-        m.calls.append(("sync", kwargs))
-        return handler(m, client, **kwargs)
-    m.sync = sync
-    return m
-
-def make_sync_detailed_module(handler):
-    """
-    Create a module exposing 'sync_detailed(client=..., **kwargs)'.
-    """
-    m = ModuleType("op_sync_detailed")
-    m.calls = []
-    def sync_detailed(*, client, **kwargs):
-        m.calls.append(("sync_detailed", kwargs))
-        return handler(m, client, **kwargs)
-    m.sync_detailed = sync_detailed
-    return m
-
-class DummyResp:
-    def __init__(self, status_code: int, parsed=None, content=b""):
-        self.status_code = status_code
-        self.parsed = parsed
-        self.content = content
+def make_json(data: object, status_code: int = 200) -> httpx.Response:
+    return httpx.Response(
+        status_code,
+        json=data,
+        headers={"content-type": "application/json"},
+    )
 
 
-class TestDcnSDKClient(unittest.TestCase):
-    def setUp(self):
-        # Clean env between tests
-        os.environ.pop("DCN_API_BASE", None)
+class ApiRouter:
+    def __init__(self) -> None:
+        self.requests: list[httpx.Request] = []
 
-        # Import and patch dcn.client to use our fakes
-        import dcn.client as client_mod
-        self.client_mod = client_mod
+    def __call__(self, request: httpx.Request) -> httpx.Response:
+        self.requests.append(request)
+        path = request.url.path
+        method = request.method
+        query = dict(request.url.params)
 
-        # Patch generated client classes with fakes
-        self._p1 = patch.object(client_mod, "_GenClient", FakeClient)
-        self._p2 = patch.object(client_mod, "_GenAuthClient", FakeAuthClient)
-        self._p1.start()
-        self._p2.start()
-        self.addCleanup(self._p1.stop)
-        self.addCleanup(self._p2.stop)
+        if path.endswith("/version") and method == "GET":
+            return make_json({"version": "0.4.0", "build_timestamp": "2026-04-30T00:00:00Z"})
 
-        # Make model classes trivial so we don't depend on the real generated models
-        class _Model:
-            def __init__(self, *a, **k):
-                self.args = a
-                self.kwargs = k
-        self._p3 = patch.object(client_mod, "AuthRequest", _Model)
-        self._p4 = patch.object(client_mod, "RefreshRequest", _Model)
-        self._p3.start(); self._p4.start()
-        self.addCleanup(self._p3.stop); self.addCleanup(self._p4.stop)
+        if "/nonce/" in path and method == "GET":
+            return make_json({"nonce": "abcd-efgh"})
 
-    # ---------- Unit tests for helpers ----------
+        if path.endswith("/auth") and method == "POST":
+            body = json.loads(request.content.decode())
+            if body["message"] == "Login nonce: abcd-efgh":
+                return make_json({"access_token": "access-123"})
+            return make_json({"error": "bad_request"}, 400)
 
-    def test_encode_ranges(self):
-        m = self.client_mod
-        self.assertEqual(m._encode_ranges([(1,2),(3,4)]), "[(1;2)(3;4)]")
-        self.assertEqual(m._encode_ranges([]), "[]")
+        if path.endswith("/accounts") and method == "GET":
+            return make_json({
+                "limit": int(query["limit"]),
+                "total_accounts": 1,
+                "cursor": {"has_more": False, "next_after": None},
+                "accounts": [ADDR],
+            })
 
-    def test_resolve_op_success_and_failure(self):
-        m = self.client_mod
-        modname_ok = "dcn.dcn_api_client.api.version.get_version"
-        good = make_sync_module(lambda mod, c, **kw: "1.2.3")
-        with patch.dict(sys.modules, {modname_ok: good}):
-            resolved = m._resolve_op(["does.not.exist", modname_ok])
-            self.assertIs(resolved, good)
-        with self.assertRaises(ImportError):
-            m._resolve_op(["x.y.z.not_here", "also.missing"])
+        if "/account/" in path and method == "GET":
+            return make_json({
+                "address": path.rsplit("/", 1)[1],
+                "limit": int(query["limit"]),
+                "owned_connectors": ["pitch"],
+                "owned_transformations": ["identity"],
+                "owned_conditions": ["always"],
+                "cursor_connectors": {"has_more": False, "next_after": None},
+                "cursor_transformations": {"has_more": False, "next_after": None},
+                "cursor_conditions": {"has_more": False, "next_after": None},
+            })
 
-    # ---------- SDK initialization & transport injection ----------
+        if "/connector/" in path and method == "HEAD":
+            if path.endswith("/broken"):
+                return httpx.Response(
+                    503,
+                    text="temporarily down",
+                    headers={"content-type": "text/plain"},
+                )
+            return httpx.Response(404 if path.endswith("/missing") else 200)
+        if "/connector/" in path and method == "GET":
+            if path.endswith("/missing"):
+                return make_json({"error": "not_found"}, 404)
+            if path.endswith("/plain-error"):
+                return httpx.Response(
+                    500,
+                    text="plain failure",
+                    headers={"content-type": "text/plain"},
+                )
+            return make_json({
+                "name": path.rsplit("/", 1)[1],
+                "dimensions": [{"transformations": [{"name": "identity", "args": []}]}],
+                "condition_name": "",
+                "condition_args": [],
+                "owner": ADDR,
+                "address": "0x0",
+                "format_hash": FORMAT,
+            })
+        if path.endswith("/connector") and method == "POST":
+            body = json.loads(request.content.decode())
+            return make_json({"name": body["name"], "owner": ADDR, "address": "0x0", "format_hash": FORMAT}, 201)
 
-    def test_init_uses_default_base_and_authclient_when_token(self):
-        m = self.client_mod
-        s = m.Client(access_token="abc123")
-        self.assertIsInstance(s._client, FakeAuthClient)
-        self.assertEqual(s._client.base_url, m.DEFAULT_BASE)
+        if "/transformation/" in path and method == "HEAD":
+            return httpx.Response(404 if path.endswith("/missing") else 200)
+        if "/transformation/" in path and method == "GET":
+            return make_json({"name": path.rsplit("/", 1)[1], "owner": ADDR, "address": "0x0", "sol_src": "return x;"})
+        if path.endswith("/transformation") and method == "POST":
+            body = json.loads(request.content.decode())
+            return make_json({"name": body["name"], "owner": ADDR, "address": "0x0"}, 201)
 
-    def test_init_uses_env_base_when_set(self):
-        m = self.client_mod
-        with patch.dict(os.environ, {"DCN_API_BASE": "https://custom.base/"}):
-            s = m.Client()
-            self.assertIsInstance(s._client, FakeClient)
-            self.assertEqual(s._client.base_url, "https://custom.base")
+        if "/condition/" in path and method == "HEAD":
+            return httpx.Response(404 if path.endswith("/missing") else 200)
+        if "/condition/" in path and method == "GET":
+            return make_json({"name": path.rsplit("/", 1)[1], "owner": ADDR, "address": "0x0", "sol_src": "return true;"})
+        if path.endswith("/condition") and method == "POST":
+            body = json.loads(request.content.decode())
+            return make_json({"name": body["name"], "owner": ADDR, "address": "0x0"}, 201)
 
-    def test_transport_injection_replaces_httpx_client(self):
-        m = self.client_mod
-        transport = httpx.MockTransport(lambda r: httpx.Response(204))
-        s = m.Client(transport=transport)
-        # new httpx.Client should be created carrying our transport
-        self.assertIs(getattr(s._client.client, "_transport"), transport)
+        if path.endswith("/execute") and method == "POST":
+            body = json.loads(request.content.decode())
+            return make_json([{"path": f"/{body['connector_name']}", "data": [1, 2, 3]}])
 
-    # ---------- Tokens flow ----------
+        if path.endswith("/formats") and method == "GET":
+            return make_json({
+                "limit": int(query["limit"]),
+                "total_formats": 1,
+                "cursor": {"has_more": False, "next_after": None},
+                "formats": [FORMAT],
+            })
 
-    def test_set_tokens_rebuilds_client_and_sets_refresh(self):
-        m = self.client_mod
-        s = m.Client()
-        self.assertIsInstance(s._client, FakeClient)  # unauth initially
-        s._set_tokens("new_access", "new_refresh")
-        self.assertIsInstance(s._client, FakeAuthClient)
-        self.assertEqual(s.access_token, "new_access")
-        self.assertEqual(s.refresh_token, "new_refresh")
+        if "/format/" in path and method == "GET":
+            return make_json({
+                "format_hash": path.rsplit("/", 1)[1],
+                "limit": int(query["limit"]),
+                "total_connectors": 1,
+                "cursor": {"has_more": False, "next_after": None},
+                "scalars": ["scalar:0"],
+                "connectors": ["pitch"],
+            })
 
-    # ---------- _call behavior: sync path ----------
+        if path.endswith("/feed") and method == "GET":
+            return make_json({
+                "limit": int(query["limit"]),
+                "cursor": {"has_more": False, "next_before": None},
+                "items": [{
+                    "feed_id": "eth:1:connector_added:pitch",
+                    "event_type": "connector_added",
+                    "status": "finalized",
+                    "visible": True,
+                    "tx_hash": "0xabc",
+                    "block_number": 1,
+                    "tx_index": 0,
+                    "log_index": 0,
+                    "history_cursor": "cursor",
+                    "created_at_ms": 1,
+                    "updated_at_ms": 1,
+                    "projector_version": 1,
+                    "payload": {"type": "connector", "name": "pitch", "owner": ADDR},
+                }],
+            })
 
-    def test_call_sync_raises_without_refresh_on_401(self):
-        m = self.client_mod
+        if path.endswith("/feed/stream") and method == "GET":
+            return httpx.Response(
+                200,
+                text='event: stream_meta\ndata: {"has_more":false}\n\n',
+                headers={"content-type": "text/event-stream"},
+            )
 
-        def handler(mod, client, **kw):
-            req = httpx.Request("GET", "https://x")
-            resp = httpx.Response(401, request=req)
-            raise httpx.HTTPStatusError("unauth", request=req, response=resp)
+        return make_json({"error": "not_found", "path": path}, 404)
 
-        modname = "dcn.dcn_api_client.api.version.get_version"
-        with patch.dict(sys.modules, {modname: make_sync_module(handler)}):
-            s = m.Client(access_token="tok")  # but no refresh token to auto-refresh
-            with self.assertRaises(httpx.HTTPStatusError):
-                s.version()
 
-    def test_call_sync_auto_refresh_and_retry(self):
-        m = self.client_mod
-        calls = {"version": 0, "refresh": 0}
+class TestDcnClient(unittest.TestCase):
+    def setUp(self) -> None:
+        self.router = ApiRouter()
+        self.client = Client(
+            base_url="https://example.invalid/chain",
+            access_token="access-123",
+            transport=httpx.MockTransport(self.router),
+        )
 
-        def version_handler(mod, client, **kw):
-            calls["version"] += 1
-            if calls["version"] == 1:
-                req = httpx.Request("GET", "https://x")
-                resp = httpx.Response(401, request=req)
-                raise httpx.HTTPStatusError("unauth", request=req, response=resp)
-            return "ok"
+    def last_request(self) -> httpx.Request:
+        return self.router.requests[-1]
 
-        def refresh_handler(mod, client, **kw):
-            calls["refresh"] += 1
-            return {"access_token": "new123"}
+    def test_version_uses_chain_base_url(self) -> None:
+        out = self.client.version()
+        self.assertEqual(out["version"], "0.4.0")
+        self.assertEqual(str(self.last_request().url), "https://example.invalid/chain/version")
 
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.version.get_version": make_sync_module(version_handler),
-            "dcn.dcn_api_client.api.auth.post_refresh": make_sync_module(refresh_handler),
-        }):
-            s = m.Client(access_token="old", refresh_token="rftok")
-            out = s.version()
-            self.assertEqual(out, "ok")
-            self.assertEqual(calls["version"], 2)
-            self.assertEqual(calls["refresh"], 1)
-            self.assertEqual(s.access_token, "new123")
+    def test_env_base_url_and_context_manager(self) -> None:
+        router = ApiRouter()
+        with patch.dict("os.environ", {"DCN_API_BASE": "https://env.invalid/chain/"}):
+            with Client(transport=httpx.MockTransport(router)) as client:
+                out = client.version()
+                self.assertEqual(out["version"], "0.4.0")
+            self.assertTrue(client._client.is_closed)
 
-    # ---------- _call behavior: sync_detailed path ----------
+        self.assertEqual(str(router.requests[-1].url), "https://env.invalid/chain/version")
 
-    def test_call_sync_detailed_auto_refresh_and_retry(self):
-        m = self.client_mod
-        calls = {"version": 0, "refresh": 0}
+    def test_public_reads_omit_auth_and_mutations_attach_bearer(self) -> None:
+        self.client.version()
+        self.assertNotIn("authorization", self.last_request().headers)
 
-        def version_detailed_handler(mod, client, **kw):
-            calls["version"] += 1
-            if calls["version"] == 1:
-                return DummyResp(401, parsed=None, content=b"expired")
-            return DummyResp(200, parsed="v1.0")
+        self.client.execute("pitch", 8)
+        self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
 
-        def refresh_handler(mod, client, **kw):
-            calls["refresh"] += 1
-            return {"access_token": "xyz"}
+    def test_login_with_signature_sets_token_and_posts_auth_body(self) -> None:
+        self.client.access_token = None
+        out = self.client.login_with_signature(ADDR, "Login nonce: abcd-efgh", "0xSIG")
+        self.assertEqual(out["access_token"], "access-123")
+        self.assertEqual(self.client.access_token, "access-123")
 
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.version.get_version": make_sync_detailed_module(version_detailed_handler),
-            "dcn.dcn_api_client.api.auth.post_refresh": make_sync_module(refresh_handler),
-        }):
-            s = m.Client(access_token="old", refresh_token="rftok")
-            out = s.version()
-            self.assertEqual(out, "v1.0")
-            self.assertEqual(calls["version"], 2)
-            self.assertEqual(calls["refresh"], 1)
-            self.assertEqual(s.access_token, "xyz")
+        request = self.last_request()
+        self.assertNotIn("authorization", request.headers)
+        self.assertEqual(
+            json.loads(request.content.decode()),
+            {"address": ADDR, "message": "Login nonce: abcd-efgh", "signature": "0xSIG"},
+        )
 
-    # ---------- Auth flows ----------
+    def test_login_with_account_sets_access_token(self) -> None:
+        account = SimpleNamespace(address=ADDR)
+        with patch("dcn.client.sign_login_nonce", return_value=("Login nonce: abcd-efgh", "0xSIG")):
+            self.client.access_token = None
+            out = self.client.login_with_account(account)  # type: ignore[arg-type]
+        self.assertEqual(out["access_token"], "access-123")
+        self.assertEqual(self.client.access_token, "access-123")
 
-    def test_login_with_account_happy_path_dict_nonce(self):
-        m = self.client_mod
+    def test_account_endpoints(self) -> None:
+        listed = self.client.list_accounts(limit=2, after=ADDR)
+        self.assertEqual(listed["accounts"], [ADDR])
+        self.assertEqual(dict(self.last_request().url.params)["after"], ADDR)
 
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.auth.get_nonce": make_sync_module(lambda mod, c, **kw: {"nonce": "hello"}),
-            "dcn.dcn_api_client.api.auth.post_auth": make_sync_module(lambda mod, c, **kw: {"access_token": "A", "refresh_token": "R"}),
-        }):
-            with patch.object(m, "sign_login_nonce", lambda account, nonce: ("<message>", "<sig>")):
-                s = m.Client()
-                acct = SimpleNamespace(address="0xabc")
-                resp = s.login_with_account(acct)
-                self.assertEqual(resp["access_token"], "A")
-                self.assertEqual(resp["refresh_token"], "R")
-                self.assertEqual(s.access_token, "A")
-                self.assertEqual(s.refresh_token, "R")
-                self.assertIsInstance(s._client, FakeAuthClient)
+        info = self.client.account_info(
+            ADDR,
+            limit=3,
+            after_connectors="pitch",
+            after_transformations="identity",
+            after_conditions="always",
+        )
+        self.assertEqual(info["owned_connectors"], ["pitch"])
+        query = dict(self.last_request().url.params)
+        self.assertEqual(query["after_connectors"], "pitch")
+        self.assertEqual(query["after_transformations"], "identity")
+        self.assertEqual(query["after_conditions"], "always")
 
-    def test_login_with_account_attr_nonce(self):
-        m = self.client_mod
+    def test_connector_endpoints(self) -> None:
+        self.assertTrue(self.client.connector_exists("pitch"))
+        self.assertFalse(self.client.connector_exists("missing"))
+        self.assertEqual(self.client.connector_get("pitch")["format_hash"], FORMAT)
+        created = self.client.connector_post({
+            "name": "melody",
+            "dimensions": [{"transformations": [{"name": "identity", "args": []}]}],
+            "condition_name": "",
+            "condition_args": [],
+        })
+        self.assertEqual(created["name"], "melody")
+        self.assertEqual(
+            json.loads(self.last_request().content.decode()),
+            {
+                "name": "melody",
+                "dimensions": [{"transformations": [{"name": "identity", "args": []}]}],
+                "condition_name": "",
+                "condition_args": [],
+            },
+        )
 
-        class NonceObj:
-            def __init__(self): self.nonce = "hi"
+    def test_transformation_and_condition_endpoints(self) -> None:
+        self.assertTrue(self.client.transformation_exists("identity"))
+        self.assertFalse(self.client.transformation_exists("missing"))
+        self.assertEqual(self.client.transformation_get("identity")["sol_src"], "return x;")
+        transformation = self.client.transformation_post({"name": "shift", "sol_src": "return x + 1;"})
+        self.assertEqual(transformation, {"name": "shift", "owner": ADDR, "address": "0x0"})
+        self.assertNotIn("sol_src", transformation)
+        self.assertEqual(
+            json.loads(self.last_request().content.decode()),
+            {"name": "shift", "sol_src": "return x + 1;"},
+        )
 
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.auth.get_nonce": make_sync_module(lambda mod, c, **kw: NonceObj()),
-            "dcn.dcn_api_client.api.auth.post_auth": make_sync_module(lambda mod, c, **kw: {"access_token": "X", "refresh_token": "Y"}),
-        }):
-            with patch.object(m, "sign_login_nonce", lambda a, n: ("msg", "sig")):
-                s = m.Client()
-                resp = s.login_with_account(SimpleNamespace(address="0xdef"))
-                self.assertEqual(resp["access_token"], "X")
-                self.assertEqual(s.access_token, "X")
+        self.assertTrue(self.client.condition_exists("always"))
+        self.assertFalse(self.client.condition_exists("missing"))
+        self.assertEqual(self.client.condition_get("always")["sol_src"], "return true;")
+        condition = self.client.condition_post({"name": "gate", "sol_src": "return true;"})
+        self.assertEqual(condition, {"name": "gate", "owner": ADDR, "address": "0x0"})
+        self.assertNotIn("sol_src", condition)
+        self.assertEqual(
+            json.loads(self.last_request().content.decode()),
+            {"name": "gate", "sol_src": "return true;"},
+        )
 
-    def test_refresh_requires_tokens(self):
-        m = self.client_mod
-        s = m.Client()
-        with self.assertRaises(RuntimeError):
-            s.refresh()
+    def test_execute_uses_post_body(self) -> None:
+        out = self.client.execute("pitch", 8, {"0": {"start_point": 12, "transformation_shift": 3}})
+        self.assertEqual(out[0]["path"], "/pitch")
+        body = json.loads(self.last_request().content.decode())
+        self.assertEqual(body["connector_name"], "pitch")
+        self.assertEqual(body["particles_count"], 8)
+        self.assertEqual(body["dynamic_ri"]["0"]["start_point"], 12)
 
-    # ---------- Public endpoints wiring ----------
+        self.client.execute("pitch", "8")
+        self.assertEqual(
+            json.loads(self.last_request().content.decode()),
+            {"connector_name": "pitch", "particles_count": "8"},
+        )
 
-    def test_account_info_wires_params_and_returns_value(self):
-        m = self.client_mod
-        seen = {}
-        def handler(mod, client, *, address, limit, page):
-            seen.update(address=address, limit=limit, page=page)
-            return {"ok": True}
+    def test_format_and_feed_endpoints(self) -> None:
+        self.assertEqual(self.client.list_formats(limit=4, after=FORMAT)["formats"], [FORMAT])
+        self.assertEqual(dict(self.last_request().url.params)["after"], FORMAT)
 
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.account.get_account_info": make_sync_module(handler)
-        }):
-            s = m.Client()
-            out = s.account_info("0xabc", limit=5, page=2)
-            self.assertEqual(out, {"ok": True})
-            self.assertEqual(seen, {"address": "0xabc", "limit": 5, "page": 2})
+        self.assertEqual(self.client.format_info(FORMAT, limit=5, after="pitch")["connectors"], ["pitch"])
+        self.assertEqual(dict(self.last_request().url.params)["after"], "pitch")
 
-    def test_feature_get_by_name_and_version_switches_ops(self):
-        m = self.client_mod
-        m_by_name = make_sync_module(lambda mod, c, **kw: ("by_name", kw))
-        m_by_name_ver = make_sync_module(lambda mod, c, **kw: ("by_name_version", kw))
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.feature.get_feature_by_name": m_by_name,
-            "dcn.dcn_api_client.api.feature.get_feature_by_name_version": m_by_name_ver,
-        }):
-            s = m.Client()
-            out1 = s.feature_get("F")
-            out2 = s.feature_get("F", "1.0.0")
-            self.assertEqual(out1[0], "by_name")
-            self.assertEqual(out1[1]["feature_name"], "F")
-            self.assertEqual(out2[0], "by_name_version")
-            self.assertEqual(out2[1]["feature_version"], "1.0.0")
+        feed = self.client.feed(
+            limit=6,
+            before="cursor",
+            event_type="connector_added",
+            include_unfinalized=True,
+        )
+        self.assertEqual(feed["items"][0]["event_type"], "connector_added")
+        query = dict(self.last_request().url.params)
+        self.assertEqual(query["before"], "cursor")
+        self.assertEqual(query["type"], "connector_added")
+        self.assertEqual(query["include_unfinalized"], "1")
 
-    def test_feature_post_passes_json_body(self):
-        m = self.client_mod
-        seen = {}
-        def handler(mod, client, *, json_body):
-            seen["json_body"] = json_body
-            return {"ok": True}
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.feature.post_feature": make_sync_module(handler)
-        }):
-            s = m.Client()
-            out = s.feature_post({"x": 1})
-            self.assertEqual(out, {"ok": True})
-            self.assertEqual(seen["json_body"], {"x": 1})
+    def test_feed_omits_optional_query_params_when_unset(self) -> None:
+        self.client.feed()
+        query = dict(self.last_request().url.params)
+        self.assertEqual(query, {"limit": "50"})
 
-    def test_transformation_get_and_post(self):
-        m = self.client_mod
-        m_by_name = make_sync_module(lambda mod, c, **kw: ("t_by_name", kw))
-        m_by_name_ver = make_sync_module(lambda mod, c, **kw: ("t_by_name_version", kw))
-        m_post = make_sync_module(lambda mod, c, **kw: ("t_post", kw))
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.transformation.get_transformation_by_name": m_by_name,
-            "dcn.dcn_api_client.api.transformation.get_transformation_by_name_version": m_by_name_ver,
-            "dcn.dcn_api_client.api.transformation.post_transformation": m_post,
-        }):
-            s = m.Client()
-            out1 = s.transformation_get("T")
-            out2 = s.transformation_get("T", "2.0")
-            out3 = s.transformation_post({"a": 1})
-            self.assertEqual(out1[0], "t_by_name")
-            self.assertEqual(out1[1]["transformation_name"], "T")
-            self.assertEqual(out2[0], "t_by_name_version")
-            self.assertEqual(out2[1]["transformation_version"], "2.0")
-            self.assertEqual(out3[0], "t_post")
-            self.assertEqual(out3[1]["json_body"], {"a": 1})
+    def test_feed_stream_endpoint(self) -> None:
+        with self.client.feed_stream(since_seq=10, limit=20) as response:
+            self.assertEqual(response.status_code, 200)
+            self.assertIn("event: stream_meta", response.text)
 
-    def test_execute_with_and_without_ranges(self):
-        m = self.client_mod
-        seen = {}
-        def no_pairs(mod, client, *, feature_name, num_samples):
-            seen["no_pairs"] = (feature_name, num_samples)
-            return "nopairs"
-        def with_pairs(mod, client, *, feature_name, num_samples, pairs):
-            seen["with_pairs"] = (feature_name, num_samples, pairs)
-            return "withpairs"
+        query = dict(self.last_request().url.params)
+        self.assertEqual(query, {"since_seq": "10", "limit": "20"})
 
-        with patch.dict(sys.modules, {
-            "dcn.dcn_api_client.api.execute.get_execute_no_pairs": make_sync_module(no_pairs),
-            "dcn.dcn_api_client.api.execute.get_execute_with_pairs": make_sync_module(with_pairs),
-        }):
-            s = m.Client()
-            out1 = s.execute("Feat", 5)
-            out2 = s.execute("Feat", 5, ranges=[(0, 2), (10, 20)])
+    def test_api_error_includes_status_and_body(self) -> None:
+        with self.assertRaises(DcnApiError) as raised:
+            self.client.connector_get("missing")
+        self.assertEqual(raised.exception.status_code, 404)
+        self.assertEqual(raised.exception.body["error"], "not_found")
 
-            self.assertEqual(out1, "nopairs")
-            self.assertEqual(out2, "withpairs")
-            self.assertEqual(seen["no_pairs"], ("Feat", 5))
-            self.assertEqual(seen["with_pairs"], ("Feat", 5, "[(0;2)(10;20)]"))
+    def test_text_error_body_and_head_error(self) -> None:
+        with self.assertRaises(DcnApiError) as raised:
+            self.client.connector_get("plain-error")
+        self.assertEqual(raised.exception.status_code, 500)
+        self.assertEqual(raised.exception.body, "plain failure")
+
+        with self.assertRaises(DcnApiError) as head_raised:
+            self.client.connector_exists("broken")
+        self.assertEqual(head_raised.exception.status_code, 503)
+        self.assertEqual(head_raised.exception.body, "temporarily down")
 
 
 if __name__ == "__main__":

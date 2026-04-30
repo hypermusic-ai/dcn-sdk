@@ -9,6 +9,7 @@
 - [Decentralized Creative Network — SDKs](#decentralized-creative-network--sdks)
   - [Contents](#contents)
   - [Install (Python SDK)](#install-python-sdk)
+  - [Install (JavaScript SDK)](#install-javascript-sdk)
 
 ---
 
@@ -32,3 +33,17 @@ Or install the latest version:
 ```bash
 pip install "git+https://github.com/hypermusic-ai/dcn-sdk.git@latest#subdirectory=python"
 ```
+
+## Install (JavaScript SDK)
+
+Package name: `@hypermusic-ai/dcn-js`
+
+```bash
+cd js
+npm install
+npm run prepack
+```
+
+Both SDKs default to the current chain API base URL:
+
+`https://api.decentralised.art/chain`
