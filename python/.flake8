@@ -1,0 +1,10 @@
+[flake8]
+max-line-length = 100
+extend-ignore = E203
+exclude =
+    .git,
+    .mypy_cache,
+    .pyright,
+    __pycache__,
+    build,
+    dcn/dcn_api_client

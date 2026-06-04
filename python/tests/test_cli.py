@@ -13,7 +13,8 @@ except Exception:
     eth_account = ModuleType("eth_account")
     eth_account_messages = ModuleType("eth_account.messages")
 
-    class Account: ...
+    class Account:
+        pass
 
     eth_account_messages.encode_defunct = lambda text: text
     eth_account.Account = Account
@@ -27,7 +28,10 @@ class TestCli(unittest.TestCase):
     def test_version_command_prints_json_and_passes_base_url(self) -> None:
         with patch("dcn.cli.Client") as client_cls:
             client = client_cls.return_value
-            client.version.return_value = {"version": "0.4.0", "build_timestamp": "2026-04-30T00:00:00Z"}
+            client.version.return_value = {
+                "version": "0.4.0",
+                "build_timestamp": "2026-04-30T00:00:00Z",
+            }
 
             stdout = io.StringIO()
             with patch.object(

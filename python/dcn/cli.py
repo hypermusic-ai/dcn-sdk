@@ -6,6 +6,13 @@ import json
 from .client import Client
 
 
+def _jsonable(value: object) -> object:
+    to_dict = getattr(value, "to_dict", None)
+    if callable(to_dict):
+        return to_dict()
+    return value
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="dcn-auth")
     parser.add_argument("--base-url", default=None)
@@ -19,6 +26,7 @@ def main() -> None:
     args = parser.parse_args()
     client = Client(base_url=args.base_url)
 
+    result: object
     if args.command == "version":
         result = client.version()
     elif args.command == "nonce":
@@ -26,4 +34,4 @@ def main() -> None:
     else:
         parser.error(f"Unknown command: {args.command}")
 
-    print(json.dumps(result, indent=2))
+    print(json.dumps(_jsonable(result), indent=2))

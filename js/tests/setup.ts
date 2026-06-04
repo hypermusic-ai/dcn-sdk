@@ -1,17 +1,8 @@
 import { vi, beforeEach, afterEach } from 'vitest';
+import { ADDR, FORMAT, json } from './fixtures';
 
 declare global {
   var __lastRequests: Array<{ input: RequestInfo | URL; init?: RequestInit }>;
-}
-
-const ADDR = '0x1111111111111111111111111111111111111111';
-const FORMAT = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-
-function json(obj: unknown, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
 }
 
 async function requestJson(init?: RequestInit) {

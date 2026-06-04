@@ -1,0 +1,3 @@
+[submodule "submodules/dcn-api-spec"]
+	path = submodules/dcn-api-spec
+	url = https://github.com/hypermusic-ai/dcn-api-spec.git

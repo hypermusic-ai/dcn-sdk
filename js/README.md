@@ -15,7 +15,7 @@ npm test
 ## Quick Start
 
 ```typescript
-import { DcnClient } from '@hypermusic-ai/dcn-js';
+import { DcnClient } from 'dcn';
 import { Wallet } from 'ethers';
 
 const sdk = new DcnClient(); // https://api.decentralised.art/chain

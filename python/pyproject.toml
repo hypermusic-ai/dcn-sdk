@@ -2,7 +2,8 @@
 requires = [
     "hatchling>=1.25",
     "hatch-vcs>=0.4",
-    "openapi-python-client>=0.25"
+    "openapi-python-client>=0.25",
+    "PyYAML>=6.0"
 ]
 build-backend = "hatchling.build"
 
@@ -52,30 +53,56 @@ include = [
     "dcn/**",
     "pyproject.toml",
     "README.md",
-    "openapi-python-client.json",
-    "gen_client.py",
-    "hatch_build.py"
+    "scripts/codegen.py",
 ]
 
-[tool.hatch.build.targets.sdist.force-include]
-"../spec/api.yaml" = "spec/api.yaml"
-
 [tool.hatch.build.hooks.custom]
-path = "hatch_build.py"
+path = "scripts/codegen.py"
 
 [tool.hatch.metadata]
 allow-direct-references = true
 
 [project.optional-dependencies]
 test = [
-  "requests>=2.31"     # only for tests
+  "requests>=2.31",
+  "coverage[toml]>=7.6",
+  "flake8>=7.1",
+  "mypy>=1.10",
+  "pyright>=1.1.390"
 ]
+
+[tool.coverage.run]
+branch = true
+source = ["dcn"]
+omit = [
+  "dcn/dcn_api_client/*",
+  "dcn/_version.py",
+]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+
+[tool.pyright]
+typeCheckingMode = "strict"
+pythonVersion = "3.9"
+include = ["dcn", "scripts"]
+exclude = ["dcn/dcn_api_client", "build"]
+
+[tool.mypy]
+strict = true
+files = ["dcn", "scripts"]
+exclude = "dcn/dcn_api_client|build"
 
 [tool.hatch.envs.test]
 features = ["test"]   # installs the [project.optional-dependencies].test extra
 
 [tool.hatch.envs.test.scripts]
 unit = "python -m unittest discover -s tests -p 'test_*.py' -v"
+coverage = "coverage run -m unittest discover -s tests -p 'test_*.py' -v && coverage report"
+lint = "flake8 dcn scripts tests"
+type = "python -m pyright && python -m mypy"
 
 [tool.hatch.envs.default.scripts]
-codegen = "python gen_client.py"
+codegen = "python scripts/codegen.py"
