@@ -53,6 +53,7 @@ include = [
     "dcn/**",
     "pyproject.toml",
     "README.md",
+    "scripts/bundle-openapi.py",
     "scripts/codegen.py",
 ]
 
@@ -68,7 +69,10 @@ test = [
   "coverage[toml]>=7.6",
   "flake8>=7.1",
   "mypy>=1.10",
-  "pyright>=1.1.390"
+  "openapi-python-client>=0.25",
+  "pyright>=1.1.390",
+  "PyYAML>=6.0",
+  "types-PyYAML>=6.0"
 ]
 
 [tool.coverage.run]
@@ -95,14 +99,18 @@ strict = true
 files = ["dcn", "scripts"]
 exclude = "dcn/dcn_api_client|build"
 
+[[tool.mypy.overrides]]
+module = "yaml"
+ignore_missing_imports = true
+
 [tool.hatch.envs.test]
 features = ["test"]   # installs the [project.optional-dependencies].test extra
 
 [tool.hatch.envs.test.scripts]
-unit = "python -m unittest discover -s tests -p 'test_*.py' -v"
-coverage = "coverage run -m unittest discover -s tests -p 'test_*.py' -v && coverage report"
+unit = "python scripts/codegen.py && python -m unittest discover -s tests -p 'test_*.py' -v"
+coverage = "python scripts/codegen.py && coverage run -m unittest discover -s tests -p 'test_*.py' -v && coverage report"
 lint = "flake8 dcn scripts tests"
-type = "python -m pyright && python -m mypy"
+type = "python scripts/codegen.py && python -m pyright && python -m mypy"
 
 [tool.hatch.envs.default.scripts]
 codegen = "python scripts/codegen.py"

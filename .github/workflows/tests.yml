@@ -69,6 +69,10 @@ jobs:
           python -m pip install -e ".[test]"
         working-directory: python
 
+      - name: Generate client
+        run: python scripts/codegen.py
+        working-directory: python
+
       - name: Test
         run: coverage run -m unittest discover -s tests -p 'test_*.py' -v && coverage report
         working-directory: python
