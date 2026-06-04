@@ -1,5 +1,21 @@
 # Python DCN SDK
 
+## Install
+
+Install a pinned GitHub Release:
+
+```bash
+pip install "dcn @ https://github.com/hypermusic-ai/dcn-sdk/releases/download/v0.1.0/dcn-python-sdk.tar.gz"
+```
+
+Install the latest GitHub Release:
+
+```bash
+pip install "dcn @ https://github.com/hypermusic-ai/dcn-sdk/releases/latest/download/dcn-python-sdk.tar.gz"
+```
+
+Prefer the pinned URL in production so installs are reproducible.
+
 ## Quick Start
 
 ```python

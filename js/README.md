@@ -1,5 +1,27 @@
 # Typescript / Javascript SDK
 
+## Install
+
+Install a pinned GitHub Release with npm:
+
+```bash
+npm install "https://github.com/hypermusic-ai/dcn-sdk/releases/download/v0.1.0/dcn-js-sdk.tgz"
+```
+
+Install the latest GitHub Release:
+
+```bash
+npm install "https://github.com/hypermusic-ai/dcn-sdk/releases/latest/download/dcn-js-sdk.tgz"
+```
+
+Prefer the pinned URL in production so installs are reproducible.
+
+Install a wallet/signing library separately if your app needs wallet authentication. For example:
+
+```bash
+npm install ethers
+```
+
 ## Build
 
 ```bash
