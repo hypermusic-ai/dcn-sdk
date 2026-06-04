@@ -31,8 +31,8 @@ Package name: `dcn`
 
 [Learn more about JavaScript SDK](js/README.md)
 
+Install the latest version:
+
 ```bash
-cd js
-npm install
-npm run prepack
+npx pnpm add "https://github.com/hypermusic-ai/dcn-sdk.git#latest&path:/js"
 ```
