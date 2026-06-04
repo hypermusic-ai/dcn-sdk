@@ -72,3 +72,6 @@ logs/
 
 # --- DCN API client ---
 dcn_api_client/
+
+# --- Version ---
+dcn/_version.py

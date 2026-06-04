@@ -1,13 +1,12 @@
-# Decentralized Creative Network — SDKs
+# Decentralized Creative Network SDKs
 
-> Monorepo containing the public OpenAPI contract for DCN and language SDKs (Python, JS, C++).
+SDKs for the chain API : `https://api.decentralised.art/chain`
 
 ---
 
-## Contents
+[![Release](https://github.com/hypermusic-ai/dcn-sdk/actions/workflows/release.yml/badge.svg)](https://github.com/hypermusic-ai/dcn-sdk/actions/workflows/release.yml)
 
-- [Decentralized Creative Network — SDKs](#decentralized-creative-network--sdks)
-  - [Contents](#contents)
+- [Decentralized Creative Network SDKs](#decentralized-creative-network-sdks)
   - [Install (Python SDK)](#install-python-sdk)
   - [Install (JavaScript SDK)](#install-javascript-sdk)
 
@@ -15,20 +14,12 @@
 
 ## Install (Python SDK)
 
-[![Python Package • Build, Test & Release](https://github.com/hypermusic-ai/dcn-sdk/actions/workflows/release-python.yml/badge.svg)](https://github.com/hypermusic-ai/dcn-sdk/actions/workflows/release-python.yml)
-
 Package name: `dcn`
 Requires Python `3.9+`
 
 [Learn more about Python SDK](python/README.md)
 
-Install from a tagged commit:
-
-```bash
-pip install "git+https://github.com/hypermusic-ai/dcn-sdk.git@v<VERSION>#subdirectory=python"
-```
-
-Or install the latest version:
+Install the latest version:
 
 ```bash
 pip install "git+https://github.com/hypermusic-ai/dcn-sdk.git@latest#subdirectory=python"
@@ -36,14 +27,12 @@ pip install "git+https://github.com/hypermusic-ai/dcn-sdk.git@latest#subdirector
 
 ## Install (JavaScript SDK)
 
-Package name: `@hypermusic-ai/dcn-js`
+Package name: `dcn`
+
+[Learn more about JavaScript SDK](js/README.md)
 
 ```bash
 cd js
 npm install
 npm run prepack
 ```
-
-Both SDKs default to the current chain API base URL:
-
-`https://api.decentralised.art/chain`

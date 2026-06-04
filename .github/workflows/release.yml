@@ -1,0 +1,80 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  javascript:
+    name: JavaScript package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: js/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: js
+
+      - name: Build package
+        run: |
+          npm run prepack
+          mkdir -p ../build/npm
+          npm pack --pack-destination ../build/npm
+        working-directory: js
+
+      - name: Upload JavaScript package
+        uses: actions/upload-artifact@v4
+        with:
+          name: js-package
+          path: build/npm/*.tgz
+
+  python:
+    name: Python distribution
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build tooling
+        run: |
+          python -m pip install -U pip
+          python -m pip install build hatchling hatch-vcs
+
+      - name: Build Python distribution
+        run: |
+          python -m build
+          ls -l dist
+        working-directory: python
+
+      - name: Upload Python distribution
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-dist
+          path: python/dist/*

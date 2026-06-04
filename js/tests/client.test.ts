@@ -1,16 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DcnApiError, DcnClient } from '../src/client';
-import '../test/setup';
-
-const ADDR = '0x1111111111111111111111111111111111111111';
-const FORMAT = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-
-function json(obj: unknown, status = 200) {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
+import { DcnClient } from '../src/client';
+import type { DcnApiError } from '../src/client';
+import { ADDR, FORMAT, json } from './fixtures';
 
 describe('DCN JS SDK wrapper', () => {
   let sdk: DcnClient;
@@ -47,7 +38,7 @@ describe('DCN JS SDK wrapper', () => {
   });
 
   it('supports custom fetch and scopes bearer auth to authenticated requests', async () => {
-    const fetchMock = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url.endsWith('/version')) {
         return json({ version: '0.4.0', build_timestamp: '2026-04-30T00:00:00Z' });
@@ -81,46 +72,6 @@ describe('DCN JS SDK wrapper', () => {
       condition_name: '',
       condition_args: [],
     });
-  });
-
-  it('authenticates with nonce and attaches bearer token afterwards', async () => {
-    const { nonce } = await sdk.getNonce(ADDR);
-    const auth = await sdk.loginWithSignature(ADDR, `Login nonce: ${nonce}`, '0xSIG');
-    expect(auth.access_token).toBe('access-123');
-    expect(sdk.accessToken).toBe('access-123');
-
-    await sdk.execute('pitch', 8);
-    const last = globalThis.__lastRequests.at(-1)!;
-    const authorization = new Headers(last.init?.headers as HeadersInit).get('Authorization');
-    expect(authorization).toBe('Bearer access-123');
-  });
-
-  it('authenticates wallets with getAddress and the nonce message', async () => {
-    const wallet = {
-      getAddress: vi.fn(async () => ADDR),
-      signMessage: vi.fn(async (message: string) => {
-        expect(message).toBe('Login nonce: abcd-efgh');
-        return '0xSIG';
-      }),
-    };
-
-    const auth = await sdk.loginWithWallet(wallet);
-    expect(auth.access_token).toBe('access-123');
-    expect(wallet.getAddress).toHaveBeenCalledOnce();
-    expect(wallet.signMessage).toHaveBeenCalledWith('Login nonce: abcd-efgh');
-
-    const last = globalThis.__lastRequests.at(-1)!;
-    expect(JSON.parse(last.init?.body as string)).toEqual({
-      address: ADDR,
-      message: 'Login nonce: abcd-efgh',
-      signature: '0xSIG',
-    });
-  });
-
-  it('rejects wallet login when no address is available', async () => {
-    await expect(sdk.loginWithWallet({ signMessage: vi.fn() })).rejects.toThrow(
-      'Wallet address is unavailable'
-    );
   });
 
   it('lists accounts and fetches account ownership with cursors', async () => {

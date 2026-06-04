@@ -29,3 +29,5 @@ go/pkg/
 # Common
 .env
 .env.*
+build/
+build-*/

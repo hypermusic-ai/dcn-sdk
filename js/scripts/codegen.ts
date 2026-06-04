@@ -1,26 +1,57 @@
-import { fileURLToPath } from 'node:url';
-import { dirname, resolve } from 'node:path';
+import { spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { generate } from 'openapi-typescript-codegen';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-// Recreate __dirname for ESM
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const sdkDir = resolve(dirname(__filename), '..');
+const repoRoot = resolve(sdkDir, '..');
+const specRoot = resolve(repoRoot, 'submodules', 'dcn-api-spec');
+const tool = resolve(specRoot, 'tools', 'generate-sdk.py');
+const specOutput = resolve(repoRoot, 'build', 'openapi', 'dcn-sdk.openapi.yaml');
+const outputDir = resolve(sdkDir, 'src', 'generated');
+const generatorBin = resolve(
+  sdkDir,
+  'node_modules',
+  '.bin',
+  process.platform === 'win32' ? 'openapi.cmd' : 'openapi'
+);
 
-const root = resolve(__dirname, '..', '..');
-const spec = resolve(root, 'spec', 'api.yaml');        // spec/api.yaml
-const out = resolve(__dirname, '..', 'src', 'generated');
-
-if (!existsSync(spec)) {
-  throw new Error(`Spec not found at ${spec}`);
+function fail(message: string): never {
+  throw new Error(`${message}\nRun: git submodule update --init --recursive submodules/dcn-api-spec`);
 }
 
-await generate({
-  input: spec,
-  output: out,
-  httpClient: 'fetch',         // lightweight; can switch to 'axios' (?)
-  useUnionTypes: true,
-  exportSchemas: true,
-  postfixServices: 'Api',      // e.g., VersionApi, AuthApi
-  clientName: 'DcnGeneratedClient'
-});
+if (!existsSync(tool)) {
+  fail(`dcn-api-spec codegen tool not found: ${tool}`);
+}
+
+if (!existsSync(generatorBin)) {
+  throw new Error(`TypeScript OpenAPI generator not found: ${generatorBin}\nRun: npm install`);
+}
+
+const result = spawnSync(
+  'python',
+  [
+    tool,
+    'generate',
+    '--spec-root',
+    specRoot,
+    '--output',
+    specOutput,
+    '--spec-output',
+    specOutput,
+    '--language',
+    'typescript',
+    '--output-dir',
+    outputDir,
+    '--generator-bin',
+    generatorBin,
+    '--client-name',
+    'DcnGeneratedClient',
+  ],
+  { cwd: repoRoot, stdio: 'inherit' }
+);
+
+if (result.status !== 0) {
+  process.exit(result.status ?? 1);
+}
