@@ -57,6 +57,9 @@ include = [
     "hatch_build.py"
 ]
 
+[tool.hatch.build.targets.sdist.force-include]
+"../spec/api.yaml" = "spec/api.yaml"
+
 [tool.hatch.build.hooks.custom]
 path = "hatch_build.py"
 

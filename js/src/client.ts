@@ -1,148 +1,407 @@
-import { OpenAPI } from './generated/core/OpenAPI';
-import { FetchHttpRequest } from './generated/core/FetchHttpRequest'; // <-- add this
+declare const process: { env?: Record<string, string | undefined> } | undefined;
 
-import {
-    VersionApi,
-    AuthApi,
-    AccountApi,
-    FeatureApi,
-    TransformationApi,
-    ExecuteApi,
-} from './generated/index';
-
-import type {
-    AuthRequest,
-    AuthResponse,
-    RefreshResponse,
-    FeatureCreateRequest,
-    TransformationCreateRequest,
-    ExecuteItem,
-    FeatureGetResponse,
-    TransformationGetResponse,
-    AccountResponse,
-    VersionResponse,
-} from './generated/index';
+export type Address = string;
+export type FormatHash = string;
+export type FeedEventType = 'connector_added' | 'transformation_added' | 'condition_added';
+export type FeedEventStatus = 'observed' | 'safe' | 'finalized' | 'removed';
 
 export interface DcnClientOptions {
     baseUrl?: string;
     accessToken?: string | null;
-    refreshToken?: string | null;
+    fetch?: typeof fetch;
 }
 
-const DEFAULT_BASE = 'https://api.decentralised.art';
+export interface VersionResponse {
+    build_timestamp: string;
+    version: string;
+}
 
-function encodeRunningInstances(pairs: Array<[number, number]>): string {
-    return `[${pairs.map(([a, b]) => `(${a};${b})`).join(',')}]`;
+export interface NonceResponse {
+    nonce: string;
+}
+
+export interface AuthResponse {
+    access_token: string;
+}
+
+export interface CursorState<T = string> {
+    has_more: boolean;
+    next_after: T | null;
+}
+
+export interface AccountListResponse {
+    limit: number;
+    total_accounts: number;
+    cursor: CursorState<Address>;
+    accounts: Address[];
+}
+
+export interface AccountInfoResponse {
+    address: Address;
+    limit: number;
+    owned_connectors: string[];
+    owned_transformations: string[];
+    owned_conditions: string[];
+    cursor_connectors: CursorState;
+    cursor_transformations: CursorState;
+    cursor_conditions: CursorState;
+}
+
+export interface TransformationCallDef {
+    name: string;
+    args?: number[];
+}
+
+export interface RunningInstance {
+    start_point: number;
+    transformation_shift: number;
+}
+
+export interface ConnectorDimension {
+    transformations: TransformationCallDef[];
+    composite?: string;
+    bindings?: Record<string, string>;
+}
+
+export interface CreateConnectorRequest {
+    name: string;
+    dimensions: ConnectorDimension[];
+    condition_name: string;
+    condition_args: number[];
+    static_ri?: Record<string, RunningInstance>;
+}
+
+export interface ConnectorInfoResponse extends CreateConnectorRequest {
+    condition_name: string;
+    condition_args: number[];
+    owner: Address;
+    address: string;
+    format_hash: FormatHash;
+}
+
+export interface CreateConnectorResponse {
+    name: string;
+    owner: Address;
+    address: string;
+    format_hash: FormatHash;
+}
+
+export interface CreateSourceRequest {
+    name: string;
+    sol_src: string;
+}
+
+export interface SourceInfoResponse extends CreateSourceRequest {
+    owner: Address;
+    address: string;
+}
+
+export interface CreateSourceResponse {
+    name: string;
+    owner: Address;
+    address: string;
+}
+
+export type TransformationInfoResponse = SourceInfoResponse;
+export type CreateTransformationRequest = CreateSourceRequest;
+export type CreateTransformationResponse = CreateSourceResponse;
+export type ConditionInfoResponse = SourceInfoResponse;
+export type CreateConditionRequest = CreateSourceRequest;
+export type CreateConditionResponse = CreateSourceResponse;
+
+export interface ExecuteRequest {
+    connector_name: string;
+    particles_count: number | string;
+    dynamic_ri?: Record<string, RunningInstance>;
+}
+
+export interface ParticlesResultItem {
+    path: string;
+    data: number[];
+}
+
+export type ExecuteResponse = ParticlesResultItem[];
+
+export interface FormatListResponse {
+    limit: number;
+    total_formats: number;
+    cursor: CursorState<FormatHash>;
+    formats: FormatHash[];
+}
+
+export interface FormatInfoResponse {
+    format_hash: FormatHash;
+    limit: number;
+    total_connectors: number;
+    cursor: CursorState;
+    scalars: string[];
+    connectors: string[];
+}
+
+export interface FeedEventPayload {
+    type: 'connector' | 'transformation' | 'condition';
+    name: string;
+    owner: Address;
+    [key: string]: unknown;
+}
+
+export interface FeedItem {
+    feed_id: string;
+    event_type: FeedEventType;
+    status: FeedEventStatus;
+    visible: boolean;
+    tx_hash: string;
+    block_number: number;
+    tx_index: number;
+    log_index: number;
+    history_cursor: string;
+    created_at_ms: number;
+    updated_at_ms: number;
+    projector_version: number;
+    payload: FeedEventPayload;
+}
+
+export interface FeedPage {
+    limit: number;
+    cursor: {
+        has_more: boolean;
+        next_before: string | null;
+    };
+    items: FeedItem[];
+}
+
+export interface FeedOptions {
+    limit?: number;
+    before?: string;
+    type?: FeedEventType;
+    includeUnfinalized?: boolean;
+}
+
+export interface AccountInfoOptions {
+    limit?: number;
+    afterConnectors?: string;
+    afterTransformations?: string;
+    afterConditions?: string;
+}
+
+export interface PageOptions {
+    limit?: number;
+    after?: string;
+}
+
+export class DcnApiError extends Error {
+    readonly status: number;
+    readonly body: unknown;
+
+    constructor(status: number, body: unknown) {
+        super(`DCN API request failed with status ${status}`);
+        this.name = 'DcnApiError';
+        this.status = status;
+        this.body = body;
+    }
+}
+
+const DEFAULT_BASE = 'https://api.decentralised.art/chain';
+
+type QueryValue = string | number | boolean | null | undefined;
+
+function stripSlashes(value: string): string {
+    return value.replace(/\/+$/, '');
+}
+
+async function parseBody(resp: Response): Promise<unknown> {
+    const contentType = resp.headers.get('content-type') ?? '';
+    if (resp.status === 204) return undefined;
+    if (contentType.includes('application/json')) return resp.json();
+    const text = await resp.text();
+    return text.length ? text : undefined;
 }
 
 export class DcnClient {
     private _accessToken?: string | null;
-    private _refreshToken?: string | null;
-    private _http: FetchHttpRequest; // <-- hold the http request instance
+    private readonly _baseUrl: string;
+    private readonly _fetch: typeof fetch;
 
     constructor(opts: DcnClientOptions = {}) {
-        const base = (opts.baseUrl ?? process.env.DCN_API_BASE ?? DEFAULT_BASE).replace(/\/+$/, '');
+        const envBase = typeof process !== 'undefined' ? process.env?.DCN_API_BASE : undefined;
+        this._baseUrl = stripSlashes(opts.baseUrl ?? envBase ?? DEFAULT_BASE);
         this._accessToken = opts.accessToken ?? null;
-        this._refreshToken = opts.refreshToken ?? null;
-
-        // Configure OpenAPI (this is the *config*)
-        OpenAPI.BASE = base;
-        OpenAPI.WITH_CREDENTIALS = false;
-        OpenAPI.TOKEN = async () => this._accessToken ?? '';
-
-        OpenAPI.ENCODE_PATH = (path: string) => {
-            // Keep [ ] ( ) ; , and / literally; encode everything else that isn't
-            // an unreserved character per RFC3986.
-            return path.replace(
-                /[^A-Za-z0-9\-._~\/\[\]\(\);,]/g,
-                (ch) => encodeURIComponent(ch)
-            );
-        };
-
-        // Create the concrete HTTP *client* (this satisfies BaseHttpRequest)
-        this._http = new FetchHttpRequest(OpenAPI);
+        this._fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
     }
 
-    // -------------------- Version --------------------
+    private url(path: string, query?: Record<string, QueryValue>): string {
+        const url = new URL(path.replace(/^\/+/, ''), `${this._baseUrl}/`);
+        for (const [key, value] of Object.entries(query ?? {})) {
+            if (value === undefined || value === null) continue;
+            url.searchParams.set(key, String(value));
+        }
+        return url.toString();
+    }
+
+    private async request<T>(
+        method: string,
+        path: string,
+        opts: { body?: unknown; query?: Record<string, QueryValue>; auth?: boolean } = {}
+    ): Promise<T> {
+        const headers: Record<string, string> = {};
+        if (opts.body !== undefined) headers['Content-Type'] = 'application/json';
+        if (opts.auth !== false && this._accessToken) {
+            headers.Authorization = `Bearer ${this._accessToken}`;
+        }
+
+        const resp = await this._fetch(this.url(path, opts.query), {
+            method,
+            headers,
+            body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+        });
+        const parsed = await parseBody(resp);
+        if (!resp.ok) throw new DcnApiError(resp.status, parsed);
+        return parsed as T;
+    }
+
+    private async exists(path: string): Promise<boolean> {
+        const resp = await this._fetch(this.url(path), { method: 'HEAD' });
+        if (resp.status === 404) return false;
+        if (!resp.ok) throw new DcnApiError(resp.status, await parseBody(resp));
+        return true;
+    }
+
     async version(): Promise<VersionResponse> {
-        return await new VersionApi(this._http).getVersion();
+        return this.request('GET', '/version', { auth: false });
     }
 
-    // -------------------- Auth --------------------
-    async getNonce(address: `0x${string}`) {
-        return await new AuthApi(this._http).getNonce(address);
+    async getNonce(address: Address): Promise<NonceResponse> {
+        return this.request('GET', `/nonce/${encodeURIComponent(address)}`, { auth: false });
     }
 
-    async loginWithSignature(address: `0x${string}`, message: string, signature: string): Promise<AuthResponse> {
-        const body: AuthRequest = { address, message, signature };
-        const resp = await new AuthApi(this._http).postAuth(body);
+    async loginWithSignature(
+        address: Address,
+        message: string,
+        signature: string
+    ): Promise<AuthResponse> {
+        const resp = await this.request<AuthResponse>('POST', '/auth', {
+            auth: false,
+            body: { address, message, signature },
+        });
         this._accessToken = resp.access_token;
-        this._refreshToken = resp.refresh_token;
         return resp;
     }
 
-    async loginWithWallet(wallet: any): Promise<AuthResponse> {
-        const address = wallet.address as `0x${string}`;
+    async loginWithWallet(wallet: { address?: string; getAddress?: () => Promise<string>; signMessage: (message: string) => Promise<string> }): Promise<AuthResponse> {
+        const address = wallet.address ?? await wallet.getAddress?.();
+        if (!address) throw new Error('Wallet address is unavailable');
         const { nonce } = await this.getNonce(address);
         const message = `Login nonce: ${nonce}`;
         const signature = await wallet.signMessage(message);
         return this.loginWithSignature(address, message, signature);
     }
 
-    async refresh(): Promise<RefreshResponse> {
-        if (!this._refreshToken) throw new Error('Missing refresh token');
+    async listAccounts(opts: PageOptions = {}): Promise<AccountListResponse> {
+        return this.request('GET', '/accounts', {
+            auth: false,
+            query: { limit: opts.limit ?? 50, after: opts.after },
+        });
+    }
 
-        const api = new AuthApi(this._http);
+    async accountInfo(address: Address, opts: AccountInfoOptions = {}): Promise<AccountInfoResponse> {
+        return this.request('GET', `/account/${encodeURIComponent(address)}`, {
+            auth: false,
+            query: {
+                limit: opts.limit ?? 50,
+                after_connectors: opts.afterConnectors,
+                after_transformations: opts.afterTransformations,
+                after_conditions: opts.afterConditions,
+            },
+        });
+    }
 
-        // First argument: header value (string)
-        // Second argument: optional body (can be `{}` or undefined)
-        const resp = await api.postRefresh(this._refreshToken, {});
+    async connectorExists(name: string): Promise<boolean> {
+        return this.exists(`/connector/${encodeURIComponent(name)}`);
+    }
 
-        this._accessToken = resp.access_token;
-        if (resp.refresh_token) this._refreshToken = resp.refresh_token;
+    async connectorGet(name: string): Promise<ConnectorInfoResponse> {
+        return this.request('GET', `/connector/${encodeURIComponent(name)}`, { auth: false });
+    }
+
+    async connectorPost(req: CreateConnectorRequest): Promise<CreateConnectorResponse> {
+        return this.request('POST', '/connector', { body: req });
+    }
+
+    async transformationExists(name: string): Promise<boolean> {
+        return this.exists(`/transformation/${encodeURIComponent(name)}`);
+    }
+
+    async transformationGet(name: string): Promise<TransformationInfoResponse> {
+        return this.request('GET', `/transformation/${encodeURIComponent(name)}`, { auth: false });
+    }
+
+    async transformationPost(req: CreateTransformationRequest): Promise<CreateTransformationResponse> {
+        return this.request('POST', '/transformation', { body: req });
+    }
+
+    async conditionExists(name: string): Promise<boolean> {
+        return this.exists(`/condition/${encodeURIComponent(name)}`);
+    }
+
+    async conditionGet(name: string): Promise<ConditionInfoResponse> {
+        return this.request('GET', `/condition/${encodeURIComponent(name)}`, { auth: false });
+    }
+
+    async conditionPost(req: CreateConditionRequest): Promise<CreateConditionResponse> {
+        return this.request('POST', '/condition', { body: req });
+    }
+
+    async execute(
+        connectorName: string,
+        particlesCount: number | string,
+        dynamicRi?: Record<string, RunningInstance>
+    ): Promise<ExecuteResponse> {
+        return this.request('POST', '/execute', {
+            body: {
+                connector_name: connectorName,
+                particles_count: particlesCount,
+                ...(dynamicRi ? { dynamic_ri: dynamicRi } : {}),
+            } satisfies ExecuteRequest,
+        });
+    }
+
+    async listFormats(opts: PageOptions = {}): Promise<FormatListResponse> {
+        return this.request('GET', '/formats', {
+            auth: false,
+            query: { limit: opts.limit ?? 50, after: opts.after },
+        });
+    }
+
+    async formatInfo(hash: FormatHash, opts: PageOptions = {}): Promise<FormatInfoResponse> {
+        return this.request('GET', `/format/${encodeURIComponent(hash)}`, {
+            auth: false,
+            query: { limit: opts.limit ?? 50, after: opts.after },
+        });
+    }
+
+    async feed(opts: FeedOptions = {}): Promise<FeedPage> {
+        return this.request('GET', '/feed', {
+            auth: false,
+            query: {
+                limit: opts.limit ?? 50,
+                before: opts.before,
+                type: opts.type,
+                include_unfinalized:
+                    opts.includeUnfinalized === undefined ? undefined : opts.includeUnfinalized ? 1 : 0,
+            },
+        });
+    }
+
+    async feedStream(opts: { sinceSeq?: number; limit?: number } = {}): Promise<Response> {
+        const resp = await this._fetch(this.url('/feed/stream', {
+            since_seq: opts.sinceSeq,
+            limit: opts.limit,
+        }), { method: 'GET' });
+        if (!resp.ok) throw new DcnApiError(resp.status, await parseBody(resp));
         return resp;
     }
 
-    // -------------------- Account --------------------
-    async accountInfo(address: `0x${string}`, limit = 50, page = 0): Promise<AccountResponse> {
-        return await new AccountApi(this._http).getAccountInfo(address, limit, page);
+    get accessToken() {
+        return this._accessToken ?? undefined;
     }
-
-    // -------------------- Feature --------------------
-    async featureGet(name: string, version?: string): Promise<FeatureGetResponse> {
-        const api = new FeatureApi(this._http);
-        return version ? api.getFeatureByNameVersion(name, version) : api.getFeatureByName(name);
-    }
-
-    async featurePost(req: FeatureCreateRequest) {
-        return await new FeatureApi(this._http).postFeature(req);
-    }
-
-    // -------------------- Transformation --------------------
-    async transformationGet(name: string, version?: string): Promise<TransformationGetResponse> {
-        const api = new TransformationApi(this._http);
-        return version ? api.getTransformationByNameVersion(name, version) : api.getTransformationByName(name);
-    }
-
-    async transformationPost(req: TransformationCreateRequest) {
-        return await new TransformationApi(this._http).postTransformation(req);
-    }
-
-    // -------------------- Execute --------------------
-    async execute(
-        featureName: string,
-        numSamples: number,
-        runningInstances?: Array<[number, number]>
-    ): Promise<ExecuteItem[]> {
-        const api = new ExecuteApi(this._http);
-        if (!runningInstances?.length) {
-            return await api.getExecuteNoRunningInstances(featureName, numSamples);
-        } else {
-            const encoded = encodeRunningInstances(runningInstances);
-            return await api.getExecuteWithRunningInstances(featureName, numSamples, encoded);
-        }
-    }
-
-    get accessToken() { return this._accessToken ?? undefined; }
-    get refreshToken() { return this._refreshToken ?? undefined; }
 }
