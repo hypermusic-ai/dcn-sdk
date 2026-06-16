@@ -65,7 +65,9 @@ function fakeClient(overrides: Partial<Record<keyof DcnClient, unknown>> = {}): 
             format_hash: FORMAT,
         })),
         connectorExists: vi.fn(async () => true),
+        transformationExists: vi.fn(async () => true),
         transformationGet: vi.fn(async (name: string) => ({ name, sol_src: 'return x;', owner: ADDR, address: '0x0' })),
+        conditionExists: vi.fn(async () => true),
         conditionGet: vi.fn(async (name: string) => ({ name, sol_src: 'return true;', owner: ADDR, address: '0x0' })),
         formatInfo: vi.fn(async () => ({ connectors: ['pitch'] })),
         listFormats: vi.fn(async () => ({ formats: [FORMAT] })),
@@ -119,6 +121,21 @@ describe('world runtime <-> host broker', () => {
         });
     });
 
+    it('round-trips transformation and condition existence checks through the host', async () => {
+        connected = connect(['dcn.transformations.read', 'dcn.conditions.read']);
+        const { sdk, spies } = connected;
+
+        await expect(sdk.transformationExists('transpose')).resolves.toBe(true);
+        await expect(sdk.transformationGet('transpose')).resolves.toMatchObject({ name: 'transpose' });
+        await expect(sdk.conditionExists('always')).resolves.toBe(true);
+        await expect(sdk.conditionGet('always')).resolves.toMatchObject({ name: 'always' });
+
+        expect(spies.transformationExists).toHaveBeenCalledWith('transpose');
+        expect(spies.transformationGet).toHaveBeenCalledWith('transpose');
+        expect(spies.conditionExists).toHaveBeenCalledWith('always');
+        expect(spies.conditionGet).toHaveBeenCalledWith('always');
+    });
+
     it('serves connectorGet from the seeded cache without an RPC round-trip', async () => {
         connected = connect(['dcn.connectors.read']);
         const { sdk, host, spies } = connected;
@@ -169,6 +186,34 @@ describe('world runtime <-> host broker', () => {
 
         await expect(sdk.execute('pitch', 4)).rejects.toMatchObject({ code: 'permission_denied' });
         expect(spies.execute).not.toHaveBeenCalled();
+    });
+
+    it('gates transformation and condition reads independently', async () => {
+        connected = connect(['dcn.transformations.read']);
+        const { sdk, spies } = connected;
+
+        await expect(sdk.transformationGet('transpose')).resolves.toMatchObject({ name: 'transpose' });
+        await expect(sdk.conditionExists('always')).rejects.toMatchObject({ code: 'permission_denied' });
+        await expect(sdk.conditionGet('always')).rejects.toMatchObject({ code: 'permission_denied' });
+        expect(spies.transformationGet).toHaveBeenCalledWith('transpose');
+        expect(spies.conditionExists).not.toHaveBeenCalled();
+        expect(spies.conditionGet).not.toHaveBeenCalled();
+    });
+
+    it('gates feed behind social read permission', async () => {
+        connected = connect(['dcn.connectors.read']);
+        const { sdk, spies } = connected;
+
+        await expect(sdk.listFormats()).resolves.toMatchObject({ formats: [FORMAT] });
+        await expect(sdk.feed()).rejects.toMatchObject({ code: 'permission_denied' });
+        expect(spies.listFormats).toHaveBeenCalled();
+        expect(spies.feed).not.toHaveBeenCalled();
+
+        connected.host.dispose();
+        connected.sdk.dispose();
+        connected = connect(['dcn.social.read']);
+        await expect(connected.sdk.feed()).resolves.toMatchObject({ items: [] });
+        expect(connected.spies.feed).toHaveBeenCalled();
     });
 
     it('propagates chain API errors as host_error with the status', async () => {

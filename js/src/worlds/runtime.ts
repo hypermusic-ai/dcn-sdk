@@ -85,7 +85,9 @@ export interface WorldSdk {
     onState<TPayload = unknown>(cb: (state: WorldStateMessage<TPayload>) => void): () => void;
     connectorGet(name: string): Promise<ConnectorInfoResponse>;
     connectorExists(name: string): Promise<boolean>;
+    transformationExists(name: string): Promise<boolean>;
     transformationGet(name: string): Promise<TransformationInfoResponse>;
+    conditionExists(name: string): Promise<boolean>;
     conditionGet(name: string): Promise<ConditionInfoResponse>;
     formatInfo(hash: string, opts?: WorldPageParams): Promise<FormatInfoResponse>;
     listFormats(opts?: WorldPageParams): Promise<FormatListResponse>;
@@ -258,12 +260,20 @@ export function createWorldSdk(options: WorldSdkOptions): WorldSdk {
             if (connectorCache.has(name)) return Promise.resolve(true);
             return rpc('connectorExists', { name });
         },
+        transformationExists(name: string) {
+            if (transformationCache.has(name)) return Promise.resolve(true);
+            return rpc('transformationExists', { name });
+        },
         async transformationGet(name: string) {
             const cached = transformationCache.get(name);
             if (cached) return cached;
             const result = await rpc('transformationGet', { name });
             transformationCache.set(name, result);
             return result;
+        },
+        conditionExists(name: string) {
+            if (conditionCache.has(name)) return Promise.resolve(true);
+            return rpc('conditionExists', { name });
         },
         async conditionGet(name: string) {
             const cached = conditionCache.get(name);

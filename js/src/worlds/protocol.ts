@@ -55,6 +55,9 @@ export type WorldRuntimeSurface = 'world-page' | 'studio-plugin';
  */
 export type WorldPermission =
     | 'dcn.connectors.read'
+    | 'dcn.transformations.read'
+    | 'dcn.conditions.read'
+    | 'dcn.social.read'
     | 'dcn.execute'
     | 'browser.audio'
     | 'browser.downloads';
@@ -79,12 +82,10 @@ export interface WorldManifest {
     heroLabel?: string;
     accentColor?: string;
     acceptedFormatHashes?: string[];
-    requiredScalars?: string[];
-    acceptedScalars?: string[];
-    requiredScalarSets?: { id: string; label: string; scalars: string[] }[];
+    acceptedConnectorSets?: { connectors: string[]; optionalConnectors?: string[] }[];
     valueLimits?: {
         particlesCount?: { min: number; max: number };
-        scalarValues?: Record<string, { min: number; max: number }>;
+        connectorValues?: Record<string, { min: number; max: number }>;
     };
     preview?: string;
 }
@@ -96,7 +97,9 @@ export interface WorldManifest {
 export type WorldRpcMethod =
     | 'connectorGet'
     | 'connectorExists'
+    | 'transformationExists'
     | 'transformationGet'
+    | 'conditionExists'
     | 'conditionGet'
     | 'formatInfo'
     | 'listFormats'
@@ -131,7 +134,9 @@ export interface WorldExecuteParams {
 export interface WorldRpcMap {
     connectorGet: { params: { name: string }; result: ConnectorInfoResponse };
     connectorExists: { params: { name: string }; result: boolean };
+    transformationExists: { params: { name: string }; result: boolean };
     transformationGet: { params: { name: string }; result: TransformationInfoResponse };
+    conditionExists: { params: { name: string }; result: boolean };
     conditionGet: { params: { name: string }; result: ConditionInfoResponse };
     formatInfo: { params: { hash: string } & WorldPageParams; result: FormatInfoResponse };
     listFormats: { params: WorldPageParams; result: FormatListResponse };
@@ -146,11 +151,13 @@ export type WorldRpcResult<M extends WorldRpcMethod> = WorldRpcMap[M]['result'];
 export const WORLD_RPC_PERMISSION: Record<WorldRpcMethod, WorldPermission> = {
     connectorGet: 'dcn.connectors.read',
     connectorExists: 'dcn.connectors.read',
-    transformationGet: 'dcn.connectors.read',
-    conditionGet: 'dcn.connectors.read',
+    transformationExists: 'dcn.transformations.read',
+    transformationGet: 'dcn.transformations.read',
+    conditionExists: 'dcn.conditions.read',
+    conditionGet: 'dcn.conditions.read',
     formatInfo: 'dcn.connectors.read',
     listFormats: 'dcn.connectors.read',
-    feed: 'dcn.connectors.read',
+    feed: 'dcn.social.read',
     execute: 'dcn.execute',
 };
 

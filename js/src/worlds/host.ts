@@ -239,7 +239,9 @@ function validateRpcParams(
     switch (method) {
         case 'connectorGet':
         case 'connectorExists':
+        case 'transformationExists':
         case 'transformationGet':
+        case 'conditionExists':
         case 'conditionGet':
             return { name: requiredString(value, 'name') };
         case 'formatInfo': {
@@ -294,8 +296,12 @@ async function dispatch(
             return client.connectorGet(params.name as string);
         case 'connectorExists':
             return client.connectorExists(params.name as string);
+        case 'transformationExists':
+            return client.transformationExists(params.name as string);
         case 'transformationGet':
             return client.transformationGet(params.name as string);
+        case 'conditionExists':
+            return client.conditionExists(params.name as string);
         case 'conditionGet':
             return client.conditionGet(params.name as string);
         case 'formatInfo':
