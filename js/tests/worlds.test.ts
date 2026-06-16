@@ -19,8 +19,10 @@ class FakeWindow extends EventTarget {
     location = new URL('http://localhost/') as unknown as Location;
     lastTargetOrigin: string | undefined;
     blockedMessages: unknown[] = [];
+    postedMessages: unknown[] = [];
     postMessage(data: unknown, targetOrigin?: string): void {
         this.lastTargetOrigin = targetOrigin;
+        this.postedMessages.push(data);
         if (targetOrigin !== undefined && targetOrigin !== '*' && targetOrigin !== this.origin) {
             this.blockedMessages.push(data);
             return;
@@ -361,6 +363,78 @@ describe('world runtime <-> host broker', () => {
         worldWin.peer = hostWin;
 
         expect(seen).toEqual([]);
+        sdk.dispose();
+    });
+
+    it('ignores host RPC messages with the wrong channel token', async () => {
+        const { worldWin, hostWin } = makePair();
+        const { client, spies } = fakeClient();
+        const host = createWorldHost({
+            client,
+            worldId: WORLD_ID,
+            permissions: ['dcn.connectors.read'],
+            iframe: { contentWindow: worldWin as unknown as Window },
+            listenWindow: hostWin as unknown as Window,
+        });
+
+        hostWin.postMessage({
+            type: 'dcn:world-ready',
+            worldId: WORLD_ID,
+            channelToken: host.channelToken,
+            protocolVersion: 1,
+        });
+        hostWin.postMessage({
+            type: 'dcn:world-rpc-request',
+            worldId: WORLD_ID,
+            channelToken: 'wrong-token',
+            requestId: 'wrong-token-1',
+            method: 'connectorGet',
+            params: { name: 'pitch' },
+        });
+        await Promise.resolve();
+
+        expect(spies.connectorGet).not.toHaveBeenCalled();
+        expect(worldWin.postedMessages).not.toContainEqual(
+            expect.objectContaining({ requestId: 'wrong-token-1' })
+        );
+        host.dispose();
+    });
+
+    it('does not expose host client secrets in world URLs or broker messages', async () => {
+        const { worldWin, hostWin } = makePair();
+        const secret = 'secret-access-token-123';
+        const privateKey = '0xprivate-key-123';
+        const factory = fakeClient({
+            accessToken: secret,
+            password: 'host-password-123',
+            privateKey,
+        } as Partial<Record<keyof DcnClient, unknown>>);
+        const host = createWorldHost({
+            client: factory.client,
+            worldId: WORLD_ID,
+            permissions: ['dcn.connectors.read'],
+            iframe: { contentWindow: worldWin as unknown as Window },
+            listenWindow: hostWin as unknown as Window,
+        });
+        const sdk = createWorldSdk({
+            worldId: WORLD_ID,
+            channelToken: host.channelToken,
+            listenWindow: worldWin as unknown as Window,
+            requestTimeoutMs: 200,
+        });
+
+        const worldUrl = host.worldUrl('http://localhost/world-assets/test/index.html');
+        sdk.ready();
+        await sdk.connectorGet('pitch');
+        host.pushState({ payload: { label: 'public render state' } });
+
+        const exposed = JSON.stringify({ worldUrl, messages: worldWin.postedMessages });
+        expect(exposed).not.toContain(secret);
+        expect(exposed).not.toContain(privateKey);
+        expect(exposed).not.toContain('host-password-123');
+        expect(exposed).not.toContain('Authorization');
+        expect(exposed).not.toContain('Bearer');
+        host.dispose();
         sdk.dispose();
     });
 
