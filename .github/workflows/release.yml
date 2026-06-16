@@ -102,6 +102,7 @@ jobs:
 
       - name: Check package
         run: |
+          python scripts/codegen.py
           python -m pyright
           python -m mypy
           flake8 dcn scripts tests

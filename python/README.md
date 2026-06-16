@@ -49,7 +49,12 @@ Set `DCN_API_BASE` or pass `Client(base_url=...)` to target another chain API.
 
 ## Code Generation
 
-The package generates its client from `../submodules/dcn-api-spec`.
+The package generates its client from the OpenAPI source files in
+`../submodules/dcn-api-spec/services`. The SDK-owned
+`scripts/bundle-openapi.py` first bundles those per-service specs into one SDK
+OpenAPI document under `../build/openapi/`, then `openapi-python-client`
+generates `dcn/dcn_api_client`.
+
 Generated clients can be regenerated manually:
 
 ```bash

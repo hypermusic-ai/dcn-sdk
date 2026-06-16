@@ -73,6 +73,10 @@ jobs:
           python -m pip install -e ".[test]"
         working-directory: python
 
+      - name: Generate client
+        run: python scripts/codegen.py
+        working-directory: python
+
       - name: Typecheck
         run: |
           python -m pyright

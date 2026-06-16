@@ -7,9 +7,9 @@ const __filename = fileURLToPath(import.meta.url);
 const sdkDir = resolve(dirname(__filename), '..');
 const repoRoot = resolve(sdkDir, '..');
 const specRoot = resolve(repoRoot, 'submodules', 'dcn-api-spec');
-const tool = resolve(specRoot, 'tools', 'generate-sdk.py');
 const specOutput = resolve(repoRoot, 'build', 'openapi', 'dcn-sdk.openapi.yaml');
 const outputDir = resolve(sdkDir, 'src', 'generated');
+const bundleOpenapi = resolve(sdkDir, 'scripts', 'bundle-openapi.mjs');
 const generatorBin = resolve(
   sdkDir,
   'node_modules',
@@ -18,35 +18,54 @@ const generatorBin = resolve(
 );
 
 function fail(message: string): never {
-  throw new Error(`${message}\nRun: git submodule update --init --recursive submodules/dcn-api-spec`);
+  throw new Error(
+    `${message}\nRun: git submodule update --init --recursive submodules/dcn-api-spec`
+  );
 }
 
-if (!existsSync(tool)) {
-  fail(`dcn-api-spec codegen tool not found: ${tool}`);
+if (!existsSync(resolve(specRoot, 'services'))) {
+  fail(`dcn-api-spec services not found: ${resolve(specRoot, 'services')}`);
+}
+
+if (!existsSync(bundleOpenapi)) {
+  throw new Error(`SDK OpenAPI bundler not found: ${bundleOpenapi}`);
 }
 
 if (!existsSync(generatorBin)) {
   throw new Error(`TypeScript OpenAPI generator not found: ${generatorBin}\nRun: npm install`);
 }
 
-const result = spawnSync(
-  'python',
+const bundleResult = spawnSync(
+  'node',
   [
-    tool,
-    'generate',
+    bundleOpenapi,
     '--spec-root',
     specRoot,
     '--output',
     specOutput,
-    '--spec-output',
+  ],
+  { cwd: repoRoot, stdio: 'inherit' }
+);
+
+if (bundleResult.status !== 0) {
+  process.exit(bundleResult.status ?? 1);
+}
+
+const result = spawnSync(
+  generatorBin,
+  [
+    '--input',
     specOutput,
-    '--language',
-    'typescript',
-    '--output-dir',
+    '--output',
     outputDir,
-    '--generator-bin',
-    generatorBin,
-    '--client-name',
+    '--client',
+    'fetch',
+    '--useUnionTypes',
+    '--exportSchemas',
+    'true',
+    '--postfixServices',
+    'Api',
+    '--name',
     'DcnGeneratedClient',
   ],
   { cwd: repoRoot, stdio: 'inherit' }

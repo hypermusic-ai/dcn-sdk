@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+import json
+import os
 import shutil
 import subprocess
 import sys
-import os
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -14,7 +16,7 @@ from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 SDK_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SDK_DIR.parent
 SPEC_ROOT = REPO_ROOT / "submodules" / "dcn-api-spec"
-TOOL = SPEC_ROOT / "tools" / "generate-sdk.py"
+BUNDLE_OPENAPI = SDK_DIR / "scripts" / "bundle-openapi.py"
 SPEC_OUTPUT = REPO_ROOT / "build" / "openapi" / "dcn-sdk.openapi.yaml"
 OUTPUT_DIR = SDK_DIR / "build"
 DEST = SDK_DIR / "dcn" / "dcn_api_client"
@@ -27,34 +29,51 @@ def run(args: list[str]) -> None:
 
 def fail_missing_tool() -> None:
     raise SystemExit(
-        f"dcn-api-spec codegen tool not found: {TOOL}\n"
+        f"SDK OpenAPI bundler not found: {BUNDLE_OPENAPI}\n"
         "Run: git submodule update --init --recursive submodules/dcn-api-spec"
     )
 
 
 def main() -> int:
-    if not TOOL.exists():
+    if not BUNDLE_OPENAPI.exists():
         fail_missing_tool()
 
     run([
         sys.executable,
-        str(TOOL),
-        "generate",
+        str(BUNDLE_OPENAPI),
         "--spec-root",
         str(SPEC_ROOT),
         "--output",
         str(SPEC_OUTPUT),
-        "--spec-output",
-        str(SPEC_OUTPUT),
-        "--language",
-        "python",
-        "--output-dir",
-        str(OUTPUT_DIR),
-        "--python-project-name",
-        "dcn_api_client",
-        "--python-package-name",
-        "dcn_api_client",
     ])
+
+    command = [
+        sys.executable,
+        "-m",
+        "openapi_python_client",
+        "generate",
+        "--path",
+        str(SPEC_OUTPUT),
+        "--output-path",
+        str(OUTPUT_DIR),
+        "--overwrite",
+    ]
+    config = {
+        "project_name_override": "dcn_api_client",
+        "package_name_override": "dcn_api_client",
+    }
+    with tempfile.NamedTemporaryFile(
+        "w",
+        encoding="utf-8",
+        suffix=".json",
+        delete=False,
+    ) as file:
+        json.dump(config, file)
+        config_path = Path(file.name)
+    try:
+        run([*command, "--config", str(config_path)])
+    finally:
+        config_path.unlink(missing_ok=True)
 
     generated_pkg = OUTPUT_DIR / "dcn_api_client"
     if not generated_pkg.exists():
