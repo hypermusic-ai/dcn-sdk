@@ -18,9 +18,22 @@ def make_json(data: object, status_code: int = 200) -> httpx.Response:
     )
 
 
+SIGNING = {
+    "type": "0x2",
+    "nonce": "0x7",
+    "maxFeePerGas": "0xd09dc300",
+    "maxPriorityFeePerGas": "0x59682f00",
+    "value": "0x0",
+}
+
+
 class ApiRouter:
     def __init__(self) -> None:
         self.requests: list[httpx.Request] = []
+        # Owner the prepared transaction is sent from.
+        self.owner = ADDR
+        # Confirmations answered as pending before the transaction counts as mined.
+        self.pending_confirms = 0
 
     def __call__(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -39,7 +52,7 @@ class ApiRouter:
                     **base,
                     "status": "prepared",
                     "transaction": {
-                        "from": ADDR,
+                        "from": self.owner,
                         "to": ADDR,
                         "data": "0x1234",
                         "chainId": "0x1",
@@ -47,22 +60,27 @@ class ApiRouter:
                     },
                     "publication_nonce": 0,
                     "deadline": 1790000000,
+                    **({"signing": SIGNING} if body.get("relay") else {}),
                 })
-            if body["tx_hash"] != TX:
-                return make_json(
-                    {"message": "not mined yet", "status": "pending", "tx_hash": body["tx_hash"]},
-                    202,
-                )
-            return make_json({
-                "status": "mined",
-                "kind": kind,
-                "name": body["name"],
-                "tx_hash": body["tx_hash"],
-                "block_number": 8,
-                "address": ADDR,
-                "owner": ADDR,
-                "content_hash": body["content_hash"],
-            }, 201)
+            if path.endswith("/send"):
+                return make_json({"status": "pending", "tx_hash": TX}, 202)
+            if body["tx_hash"] == TX and self.pending_confirms > 0:
+                self.pending_confirms -= 1
+            elif body["tx_hash"] == TX:
+                return make_json({
+                    "status": "mined",
+                    "kind": kind,
+                    "name": body["name"],
+                    "tx_hash": body["tx_hash"],
+                    "block_number": 8,
+                    "address": ADDR,
+                    "owner": ADDR,
+                    "content_hash": body["content_hash"],
+                }, 201)
+            return make_json(
+                {"message": "not mined yet", "status": "pending", "tx_hash": body["tx_hash"]},
+                202,
+            )
 
         if path.endswith("/version") and method == "GET":
             return make_json({"version": "0.4.0", "build_timestamp": "2026-04-30T00:00:00Z"})

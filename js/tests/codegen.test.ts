@@ -42,7 +42,16 @@ describe('OpenAPI bundler generation parity', () => {
             );
             expect(pyResult.status, pyResult.stderr).toBe(0);
 
-            expect(JSON.parse(readFileSync(pyOut, 'utf8'))).toEqual(JSON.parse(readFileSync(jsOut, 'utf8')));
+            const bundled = JSON.parse(readFileSync(jsOut, 'utf8')) as {
+                components: { schemas: Record<string, { discriminator?: { mapping: Record<string, string> } }> };
+            };
+            expect(JSON.parse(readFileSync(pyOut, 'utf8'))).toEqual(bundled);
+
+            // Discriminator mappings point at the hoisted components, not at the source files.
+            expect(bundled.components.schemas.PrepareResponse?.discriminator?.mapping).toEqual({
+                prepared: '#/components/schemas/PreparedPublication',
+                published: '#/components/schemas/AlreadyPublished',
+            });
         } finally {
             rmSync(dir, { recursive: true, force: true });
         }

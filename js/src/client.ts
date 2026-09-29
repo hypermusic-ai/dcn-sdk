@@ -37,6 +37,9 @@ import type { PreparedPublication as GeneratedPreparedPublication } from './gene
 import type { PrepareResponse as GeneratedPrepareResponse } from './generated/models/PrepareResponse';
 import type { PublishError as GeneratedPublishError } from './generated/models/PublishError';
 import type { RunningInstance as GeneratedRunningInstance } from './generated/models/RunningInstance';
+import type { SendRequest as GeneratedSendRequest } from './generated/models/SendRequest';
+import type { SendResponse as GeneratedSendResponse } from './generated/models/SendResponse';
+import type { SigningFields as GeneratedSigningFields } from './generated/models/SigningFields';
 import type { TransformationCallDef as GeneratedTransformationCallDef } from './generated/models/TransformationCallDef';
 import type { TransformationInfoResponse as GeneratedTransformationInfoResponse } from './generated/models/TransformationInfoResponse';
 import type { UnsignedTransaction as GeneratedUnsignedTransaction } from './generated/models/UnsignedTransaction';
@@ -75,6 +78,72 @@ export type PrepareResponse = GeneratedPrepareResponse;
 export type ConfirmRequest = GeneratedConfirmRequest;
 export type ConfirmResponse = GeneratedConfirmResponse;
 export type PublishError = GeneratedPublishError;
+export type SigningFields = GeneratedSigningFields;
+export type SendRequest = GeneratedSendRequest;
+export type SendResponse = GeneratedSendResponse;
+
+/**
+ * A relayed publication as the owner signs it: `transaction` merged with `signing`. All
+ * quantities are hex, which is exactly what `eth_signTransaction` takes.
+ */
+export type RelayTransaction = UnsignedTransaction & SigningFields;
+
+/** Signs a relayed publication offline and returns the raw `0x02…` transaction. */
+export interface OfflineSigner {
+    /** Owner address. When given, it must match the prepared transaction's `from`. */
+    address?: string;
+    signTransaction(transaction: RelayTransaction): Promise<string>;
+}
+
+/** The fields of an ethers v6 `TransactionRequest` a relayed publication sets. */
+export interface EthersTransactionRequest {
+    type: 2;
+    chainId: bigint;
+    nonce: number;
+    to: string;
+    data: string;
+    gasLimit: bigint;
+    maxFeePerGas: bigint;
+    maxPriorityFeePerGas: bigint;
+    value: bigint;
+}
+
+/** A wallet `loginWithWallet` accepts: an ethers `Wallet`/`Signer` or anything shaped like one. */
+export interface LoginWallet {
+    address?: string;
+    getAddress?: () => Promise<string>;
+    signMessage: (message: string) => Promise<string>;
+    /** When present, `publish` signs with this wallet unless it is given another signer. */
+    signTransaction?: (transaction: EthersTransactionRequest) => Promise<string>;
+}
+
+function toEthersTransaction(transaction: RelayTransaction): EthersTransactionRequest {
+    return {
+        type: 2,
+        chainId: BigInt(transaction.chainId),
+        nonce: Number(BigInt(transaction.nonce)),
+        to: transaction.to,
+        data: transaction.data,
+        gasLimit: BigInt(transaction.gas),
+        maxFeePerGas: BigInt(transaction.maxFeePerGas),
+        maxPriorityFeePerGas: BigInt(transaction.maxPriorityFeePerGas),
+        value: BigInt(transaction.value),
+    };
+}
+
+/** How `publish` signs, and the limits it enforces before anything is signed. */
+export interface PublishOptions {
+    /** Signs the transaction. Defaults to the wallet passed to `loginWithWallet`. */
+    signer?: OfflineSigner;
+    /** Refuse to sign when the prepared `maxFeePerGas` exceeds this, in wei. */
+    maxFeePerGas?: bigint | number | string;
+    /** Refuse to sign for any other chain. */
+    chainId?: bigint | number | string;
+    /** Delay between confirmation checks. Defaults to 3000 ms. */
+    pollIntervalMs?: number;
+    /** Confirmation checks before giving up. Defaults to 200. */
+    maxConfirmAttempts?: number;
+}
 export type FormatListResponse = GeneratedFormatListResponse;
 export type FormatInfoResponse = GeneratedFormatInfoResponse;
 export type FeedItem = GeneratedFeedItem;
@@ -262,6 +331,7 @@ class DcnHttpRequest extends BaseHttpRequest {
 
 export class DcnClient {
     private _accessToken?: string | null;
+    private _signer: OfflineSigner | null = null;
     private readonly _baseUrl: string;
     private readonly _fetch: typeof fetch;
     private readonly _api: DcnGeneratedClient;
@@ -331,7 +401,8 @@ export class DcnClient {
     /**
      * Authenticate using an address, signed login message, and signature.
      *
-     * Stores the returned bearer token on this client for protected endpoints.
+     * Stores the returned bearer token on this client for protected endpoints. No wallet is
+     * known afterwards, so `publish` needs an explicit `signer`.
      */
     async loginWithSignature(
         address: Address,
@@ -340,21 +411,33 @@ export class DcnClient {
     ): Promise<AuthResponse> {
         const resp = await this._api.auth.postAuth({ address, message, signature });
         this._accessToken = resp.access_token;
+        this._signer = null;
         return resp;
     }
 
     /**
      * Authenticate with an ethers/browser-style wallet.
      *
-     * Fetches a nonce, signs `Login nonce: <nonce>`, then stores the returned bearer token.
+     * Fetches a nonce, signs `Login nonce: <nonce>`, then stores the returned bearer token. A
+     * wallet that can sign transactions (an ethers `Wallet`) also becomes the default signer of
+     * `publish`.
      */
-    async loginWithWallet(wallet: { address?: string; getAddress?: () => Promise<string>; signMessage: (message: string) => Promise<string> }): Promise<AuthResponse> {
+    async loginWithWallet(wallet: LoginWallet): Promise<AuthResponse> {
         const address = wallet.address ?? await wallet.getAddress?.();
         if (!address) throw new Error('Wallet address is unavailable');
         const { nonce } = await this.getNonce(address);
         const message = `Login nonce: ${nonce}`;
         const signature = await wallet.signMessage(message);
-        return this.loginWithSignature(address, message, signature);
+        const resp = await this.loginWithSignature(address, message, signature);
+
+        const signTransaction = wallet.signTransaction;
+        if (signTransaction) {
+            this._signer = {
+                address,
+                signTransaction: (transaction) => signTransaction.call(wallet, toEthersTransaction(transaction)),
+            };
+        }
+        return resp;
     }
 
     /**
@@ -507,10 +590,76 @@ export class DcnClient {
      *
      * Returns `status: 'prepared'` with an unsigned `transaction` for the owner's wallet to send
      * (`eth_sendTransaction`), or `status: 'published'` when the registry already holds it.
+     * With `relay`, the answer also carries `signing` (account nonce and fees) so the transaction
+     * can be signed offline and sent with `publishSend`. Requires bearer authentication.
+     */
+    async publishPrepare(kind: EntityKind, name: string, opts: { relay?: boolean } = {}): Promise<PrepareResponse> {
+        return this._api.publish.postPublishPrepare(kind, opts.relay ? { name, relay: true } : { name });
+    }
+
+    /**
+     * Broadcast a publication transaction the owner signed offline, through the server's chain provider.
+     *
+     * The server checks that the caller signed it and that it publishes exactly this entity, then
+     * answers with its `tx_hash`; confirm it with `publishConfirm`. The owner still pays for it.
      * Requires bearer authentication.
      */
-    async publishPrepare(kind: EntityKind, name: string): Promise<PrepareResponse> {
-        return this._api.publish.postPublishPrepare(kind, { name });
+    async publishSend(kind: EntityKind, req: SendRequest): Promise<SendResponse> {
+        return this._api.publish.postPublishSend(kind, req);
+    }
+
+    /**
+     * Publish an entity without a chain RPC endpoint: prepare it for relay, sign it offline,
+     * let the server broadcast it, and confirm it until it is mined.
+     *
+     * Signs with `opts.signer`, or else the wallet passed to `loginWithWallet`. Returns the
+     * confirmation, or the existing registration when the registry already holds this exact
+     * publication (nothing is signed then). The owner pays for the transaction.
+     * Requires bearer authentication.
+     */
+    async publish(
+        kind: EntityKind,
+        name: string,
+        opts: PublishOptions = {}
+    ): Promise<ConfirmResponse | AlreadyPublished> {
+        const signer = opts.signer ?? this._signer;
+        if (!signer) {
+            throw new Error(
+                'No signer: log in with loginWithWallet using a wallet that can sign transactions, pass ' +
+                'opts.signer, or send with a browser wallet through publishPrepare and publishConfirm'
+            );
+        }
+
+        const prepared = await this.publishPrepare(kind, name, { relay: true });
+        if (prepared.status === 'published') return prepared;
+
+        const { transaction, signing, content_hash } = prepared;
+        if (!signing) {
+            throw new Error('The server returned no signing fields; it does not support relayed publication');
+        }
+        if (signer.address && signer.address.toLowerCase() !== transaction.from.toLowerCase()) {
+            throw new Error(`The signer ${signer.address} is not the entity owner ${transaction.from}`);
+        }
+        if (opts.chainId !== undefined && BigInt(opts.chainId) !== BigInt(transaction.chainId)) {
+            throw new Error(`The publication is for chain ${String(BigInt(transaction.chainId))}, not ${String(opts.chainId)}`);
+        }
+        if (opts.maxFeePerGas !== undefined && BigInt(signing.maxFeePerGas) > BigInt(opts.maxFeePerGas)) {
+            throw new Error(`maxFeePerGas ${String(BigInt(signing.maxFeePerGas))} exceeds the limit ${String(opts.maxFeePerGas)}`);
+        }
+
+        // A publication never transfers value, whatever the server returned.
+        const raw_tx = await signer.signTransaction({ ...transaction, ...signing, type: '0x2', value: '0x0' });
+        const { tx_hash } = await this.publishSend(kind, { name, content_hash, raw_tx });
+
+        const attempts = opts.maxConfirmAttempts ?? 200;
+        for (let attempt = 1; ; ++attempt) {
+            const confirmed = await this.publishConfirm(kind, { name, content_hash, tx_hash });
+            if (confirmed.status === 'mined') return confirmed;
+            if (attempt >= attempts) {
+                throw new Error(`Publication ${tx_hash} is not mined yet; check it later with publishConfirm`);
+            }
+            await new Promise((resolve) => setTimeout(resolve, opts.pollIntervalMs ?? 3000));
+        }
     }
 
     /**

@@ -140,7 +140,18 @@ class SpecBundler {
         if (node === null || typeof node !== 'object') return deepCopy(node);
         if (typeof node.$ref === 'string') return this.resolveRef(node.$ref, currentFile);
         const out = {};
-        for (const [key, value] of Object.entries(node)) out[key] = this.resolveNode(value, currentFile);
+        for (const [key, value] of Object.entries(node)) {
+            out[key] = key === 'discriminator' ? this.resolveDiscriminator(value, currentFile) : this.resolveNode(value, currentFile);
+        }
+        return out;
+    }
+
+    // Mapping values are schema refs written as bare strings; point them at the hoisted components.
+    resolveDiscriminator(discriminator, currentFile) {
+        const out = deepCopy(discriminator);
+        for (const [name, ref] of Object.entries(out?.mapping ?? {})) {
+            out.mapping[name] = this.resolveRef(ref, currentFile).$ref;
+        }
         return out;
     }
 
