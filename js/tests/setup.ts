@@ -1,5 +1,5 @@
 import { vi, beforeEach, afterEach } from 'vitest';
-import { ADDR, FORMAT, json } from './fixtures';
+import { ADDR, FORMAT, HASH, TX, json } from './fixtures';
 
 declare global {
   var __lastRequests: Array<{ input: RequestInfo | URL; init?: RequestInit }>;
@@ -64,6 +64,36 @@ beforeEach(() => {
       });
     }
 
+    const prepareMatch = pathname.match(/\/publish\/([^/]+)\/prepare$/);
+    if (prepareMatch && method === 'POST') {
+      const body = await requestJson(init);
+      const base = { kind: prepareMatch[1], name: body.name, address: ADDR, content_hash: HASH };
+      if (body.name === 'done') return json({ ...base, status: 'published', owner: ADDR });
+      return json({
+        ...base,
+        status: 'prepared',
+        transaction: { from: ADDR, to: ADDR, data: '0x1234', chainId: '0x1', gas: '0x5208' },
+        publication_nonce: 0,
+        deadline: 1790000000,
+      });
+    }
+
+    const confirmMatch = pathname.match(/\/publish\/([^/]+)$/);
+    if (confirmMatch && method === 'POST') {
+      const body = await requestJson(init);
+      if (body.tx_hash !== TX) return json({ message: 'not mined yet', status: 'pending', tx_hash: body.tx_hash }, 202);
+      return json({
+        status: 'mined',
+        kind: confirmMatch[1],
+        name: body.name,
+        tx_hash: body.tx_hash,
+        block_number: 8,
+        address: ADDR,
+        owner: ADDR,
+        content_hash: body.content_hash,
+      }, 201);
+    }
+
     const connectorMatch = pathname.match(/\/connector\/([^/]+)$/);
     if (connectorMatch && method === 'HEAD') {
       return new Response(null, { status: connectorMatch[1] === 'missing' ? 404 : 200 });
@@ -74,6 +104,7 @@ beforeEach(() => {
         dimensions: [{ transformations: [{ name: 'identity', args: [] }] }],
         condition_name: '',
         condition_args: [],
+        static_ri: {},
         owner: ADDR,
         address: '0x0',
         format_hash: FORMAT,
@@ -89,11 +120,11 @@ beforeEach(() => {
       return new Response(null, { status: transformationMatch[1] === 'missing' ? 404 : 200 });
     }
     if (transformationMatch && method === 'GET') {
-      return json({ name: transformationMatch[1], owner: ADDR, address: '0x0', sol_src: 'return x;' });
+      return json({ name: transformationMatch[1], args_count: 1, owner: ADDR, address: '0x0' });
     }
     if (pathname.endsWith('/transformation') && method === 'POST') {
       const body = await requestJson(init);
-      return json({ name: body.name, owner: ADDR, address: '0x0' }, 201);
+      return json({ name: body.name, owner: ADDR, address: '0x0', args_count: 1 }, 201);
     }
 
     const conditionMatch = pathname.match(/\/condition\/([^/]+)$/);
@@ -101,16 +132,26 @@ beforeEach(() => {
       return new Response(null, { status: conditionMatch[1] === 'missing' ? 404 : 200 });
     }
     if (conditionMatch && method === 'GET') {
-      return json({ name: conditionMatch[1], owner: ADDR, address: '0x0', sol_src: 'return true;' });
+      return json({ name: conditionMatch[1], args_count: 0, owner: ADDR, address: '0x0' });
     }
     if (pathname.endsWith('/condition') && method === 'POST') {
       const body = await requestJson(init);
-      return json({ name: body.name, owner: ADDR, address: '0x0' }, 201);
+      return json({ name: body.name, owner: ADDR, address: '0x0', args_count: 0 }, 201);
     }
 
     if (pathname.endsWith('/execute') && method === 'POST') {
       const body = await requestJson(init);
-      return json([{ path: `/${body.connector_name}`, data: [1, 2, 3] }]);
+      return json({
+        block_number: 7,
+        block_hash: `0x${'b'.repeat(64)}`,
+        runner: ADDR,
+        particles: [{ path: `/${body.connector_name}`, data: [1, 2, 3] }],
+      });
+    }
+
+    if (pathname.endsWith('/simulate') && method === 'POST') {
+      const body = await requestJson(init);
+      return json([{ path: `/${body.connector_name}`, data: [4, 5] }]);
     }
 
     if (pathname.endsWith('/formats') && method === 'GET') {

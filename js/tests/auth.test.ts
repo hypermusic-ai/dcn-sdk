@@ -16,9 +16,11 @@ describe('DCN JS auth facade', () => {
     expect(sdk.accessToken).toBe('access-123');
 
     await sdk.execute('pitch', 8);
-    const last = globalThis.__lastRequests.at(-1)!;
-    const authorization = new Headers(last.init?.headers as HeadersInit).get('Authorization');
-    expect(authorization).toBe('Bearer access-123');
+    await sdk.simulate('pitch', 8);
+    await sdk.publishPrepare('connector', 'pitch');
+    for (const { init } of globalThis.__lastRequests.slice(-3)) {
+      expect(new Headers(init?.headers as HeadersInit).get('Authorization')).toBe('Bearer access-123');
+    }
   });
 
   it('authenticates wallets with getAddress and the nonce message', async () => {

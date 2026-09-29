@@ -25,7 +25,8 @@ from .dcn_api_client.api.connector import (
 from .dcn_api_client.api.core import get_version
 from .dcn_api_client.api.feed import get_feed
 from .dcn_api_client.api.format_ import get_format, get_formats
-from .dcn_api_client.api.runner import post_execute
+from .dcn_api_client.api.publish import post_publish_confirm, post_publish_prepare
+from .dcn_api_client.api.runner import post_execute, post_simulate
 from .dcn_api_client.api.transformation import (
     get_transformation,
     head_transformation,
@@ -34,9 +35,12 @@ from .dcn_api_client.api.transformation import (
 from .dcn_api_client.client import AuthenticatedClient, Client as GeneratedClient
 from .dcn_api_client.models.account_info_response import AccountInfoResponse
 from .dcn_api_client.models.account_list_response import AccountListResponse
+from .dcn_api_client.models.already_published import AlreadyPublished
 from .dcn_api_client.models.auth_request import AuthRequest
 from .dcn_api_client.models.auth_response import AuthResponse
 from .dcn_api_client.models.condition_info_response import ConditionInfoResponse
+from .dcn_api_client.models.confirm_request import ConfirmRequest
+from .dcn_api_client.models.confirm_response import ConfirmResponse
 from .dcn_api_client.models.connector_info_response import ConnectorInfoResponse
 from .dcn_api_client.models.create_condition_request import CreateConditionRequest
 from .dcn_api_client.models.create_condition_response import CreateConditionResponse
@@ -48,8 +52,10 @@ from .dcn_api_client.models.create_transformation_request import (
 from .dcn_api_client.models.create_transformation_response import (
     CreateTransformationResponse,
 )
+from .dcn_api_client.models.entity_kind import EntityKind
 from .dcn_api_client.models.execute_request import ExecuteRequest
 from .dcn_api_client.models.execute_request_dynamic_ri import ExecuteRequestDynamicRi
+from .dcn_api_client.models.execute_response import ExecuteResponse
 from .dcn_api_client.models.feed_event_type import FeedEventType
 from .dcn_api_client.models.feed_page import FeedPage
 from .dcn_api_client.models.format_info_response import FormatInfoResponse
@@ -57,6 +63,9 @@ from .dcn_api_client.models.format_list_response import FormatListResponse
 from .dcn_api_client.models.get_feed_include_unfinalized import GETFeedIncludeUnfinalized
 from .dcn_api_client.models.nonce_response import NonceResponse
 from .dcn_api_client.models.particles_result_item import ParticlesResultItem
+from .dcn_api_client.models.prepare_request import PrepareRequest
+from .dcn_api_client.models.prepared_publication import PreparedPublication
+from .dcn_api_client.models.publish_error import PublishError
 from .dcn_api_client.models.running_instance import RunningInstance
 from .dcn_api_client.models.transformation_info_response import TransformationInfoResponse
 from .dcn_api_client.models.version_response import VersionResponse
@@ -116,6 +125,26 @@ def _expect_list(response: Response[object], item_type: type[T]) -> list[T]:
     raise DcnApiError(int(response.status_code), _decode_error(response))
 
 
+def _execute_request(
+    connector_name: str,
+    particles_count: int | str,
+    dynamic_ri: Optional[Mapping[str, RunningInstance | Mapping[str, object]]],
+) -> ExecuteRequest:
+    dynamic: ExecuteRequestDynamicRi | Unset = UNSET
+    if dynamic_ri is not None:
+        dynamic = ExecuteRequestDynamicRi.from_dict(
+            {
+                key: value.to_dict() if isinstance(value, RunningInstance) else dict(value)
+                for key, value in dynamic_ri.items()
+            }
+        )
+    return ExecuteRequest(
+        connector_name=connector_name,
+        particles_count=particles_count,
+        dynamic_ri=dynamic,
+    )
+
+
 def _request_dict(request: Mapping[str, object] | T, typ: type[T]) -> T:
     if isinstance(request, typ):
         return request
@@ -134,7 +163,7 @@ class Client:
     """Chain API base URL."""
 
     access_token: Optional[str] = None
-    """Bearer access token used for protected publish/execute endpoints."""
+    """Bearer access token used for protected create/publish/execute endpoints."""
 
     timeout: float = 15.0
     """HTTP request timeout in seconds."""
@@ -322,9 +351,10 @@ class Client:
         self,
         request: CreateConnectorRequest | Mapping[str, object],
     ) -> CreateConnectorResponse:
-        """Publish a connector definition.
+        """Create a connector locally for simulation.
 
-        Requires bearer authentication.
+        The name must not be reserved on chain. Publish it on chain with
+        `publish_prepare`/`publish_confirm`. Requires bearer authentication.
         """
         with self._auth_headers() as client:
             return _expect(
@@ -346,7 +376,7 @@ class Client:
     def transformation_get(self, name: str) -> TransformationInfoResponse:
         """Get transformation by name.
 
-        Returns transformation source metadata, owner, and deployed address.
+        Returns name, argument count, owner, and address ("0x0" until published).
         """
         return _expect(
             self._call(get_transformation, self._generated, name),
@@ -357,9 +387,10 @@ class Client:
         self,
         request: CreateTransformationRequest | Mapping[str, object],
     ) -> CreateTransformationResponse:
-        """Publish a transformation definition.
+        """Create a transformation locally for simulation.
 
-        Requires bearer authentication.
+        The name must not be reserved on chain. Publish it on chain with
+        `publish_prepare`/`publish_confirm`. Requires bearer authentication.
         """
         with self._auth_headers() as client:
             return _expect(
@@ -381,7 +412,7 @@ class Client:
     def condition_get(self, name: str) -> ConditionInfoResponse:
         """Get condition by name.
 
-        Returns condition source metadata, owner, and deployed address.
+        Returns name, argument count, owner, and address ("0x0" until published).
         """
         return _expect(
             self._call(get_condition, self._generated, name),
@@ -392,9 +423,10 @@ class Client:
         self,
         request: CreateConditionRequest | Mapping[str, object],
     ) -> CreateConditionResponse:
-        """Publish a condition definition.
+        """Create a condition locally for simulation.
 
-        Requires bearer authentication.
+        The name must not be reserved on chain. Publish it on chain with
+        `publish_prepare`/`publish_confirm`. Requires bearer authentication.
         """
         with self._auth_headers() as client:
             return _expect(
@@ -411,33 +443,89 @@ class Client:
         connector_name: str,
         particles_count: int | str,
         dynamic_ri: Optional[Mapping[str, RunningInstance | Mapping[str, object]]] = None,
-    ) -> list[ParticlesResultItem]:
-        """Execute a connector.
+    ) -> ExecuteResponse:
+        """Execute a connector on chain.
 
-        `particles_count` accepts protobuf JSON uint32 values and rejects values
-        greater than 65536. Requires bearer authentication.
+        The result is pinned to `block_number`/`block_hash` on `runner`, so
+        anyone can re-check it. `particles_count` accepts protobuf JSON uint32
+        values between 1 and 65536. Requires bearer authentication.
         """
-        dynamic: ExecuteRequestDynamicRi | Unset = UNSET
-        if dynamic_ri is not None:
-            dynamic = ExecuteRequestDynamicRi.from_dict(
-                {
-                    key: value.to_dict() if isinstance(value, RunningInstance) else dict(value)
-                    for key, value in dynamic_ri.items()
-                }
-            )
         with self._auth_headers() as client:
-            return _expect_list(
+            return _expect(
                 self._call(
                     post_execute,
                     client,
-                    body=ExecuteRequest(
-                        connector_name=connector_name,
-                        particles_count=particles_count,
-                        dynamic_ri=dynamic,
-                    ),
+                    body=_execute_request(connector_name, particles_count, dynamic_ri),
+                ),
+                ExecuteResponse,
+            )
+
+    def simulate(
+        self,
+        connector_name: str,
+        particles_count: int | str,
+        dynamic_ri: Optional[Mapping[str, RunningInstance | Mapping[str, object]]] = None,
+    ) -> list[ParticlesResultItem]:
+        """Execute a connector in the server's local simulation EVM.
+
+        Covers entities created on this server before they are published on
+        chain. Requires bearer authentication.
+        """
+        with self._auth_headers() as client:
+            return _expect_list(
+                self._call(
+                    post_simulate,
+                    client,
+                    body=_execute_request(connector_name, particles_count, dynamic_ri),
                 ),
                 ParticlesResultItem,
             )
+
+    def publish_prepare(
+        self,
+        kind: EntityKind | str,
+        name: str,
+    ) -> PreparedPublication | AlreadyPublished:
+        """Prepare on-chain publication of an entity created on this server.
+
+        Returns a `PreparedPublication` whose unsigned `transaction` the owner's
+        wallet must send (`eth_sendTransaction`), or `AlreadyPublished` when the
+        registry already holds it. Requires bearer authentication.
+        """
+        with self._auth_headers() as client:
+            response = self._call(
+                post_publish_prepare,
+                client,
+                EntityKind(kind),
+                body=PrepareRequest(name=name),
+            )
+        if isinstance(response.parsed, (PreparedPublication, AlreadyPublished)):
+            return response.parsed
+        raise DcnApiError(int(response.status_code), _decode_error(response))
+
+    def publish_confirm(
+        self,
+        kind: EntityKind | str,
+        name: str,
+        content_hash: str,
+        tx_hash: str,
+    ) -> ConfirmResponse | PublishError:
+        """Confirm a publication transaction sent by the owner's wallet.
+
+        Looks the receipt up once: `ConfirmResponse` when mined, `PublishError`
+        with `status == "pending"` (HTTP 202) while not; repeat until mined.
+        Requires bearer authentication.
+        """
+        with self._auth_headers() as client:
+            response = self._call(
+                post_publish_confirm,
+                client,
+                EntityKind(kind),
+                body=ConfirmRequest(name=name, content_hash=content_hash, tx_hash=tx_hash),
+            )
+        if isinstance(response.parsed, (ConfirmResponse, PublishError)):
+            return response.parsed
+        raise DcnApiError(int(response.status_code), _decode_error(response))
 
     def list_formats(self, *, limit: int = 50, after: Optional[str] = None) -> FormatListResponse:
         """List connector format hashes known to the registry.

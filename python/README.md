@@ -41,11 +41,52 @@ result = sdk.execute(
     8,
     {"0": {"start_point": 12, "transformation_shift": 3}},
 )
-print(result[0].path)
+print(result.block_number, result.particles[0].path)
+
+# Entities created through *_post are local until published by their owner.
+sdk.transformation_post({"name": "shift", "sol_src": "return x + 1;"})
+print(sdk.simulate("pitch", 8)[0].path)
 ```
 
 The SDK defaults to the chain API base URL, `https://api.decentralised.art/chain`.
 Set `DCN_API_BASE` or pass `Client(base_url=...)` to target another chain API.
+
+### Publishing on chain
+
+The owner's wallet sends and pays for the publication; the server never signs it.
+Example with [web3.py](https://web3py.readthedocs.io/) v7 (not an SDK dependency)
+and the same `account` used to log in:
+
+```python
+import time
+
+from web3 import Web3
+from web3.middleware import SignAndSendRawMiddlewareBuilder
+
+from dcn.client import PreparedPublication
+
+w3 = Web3(Web3.HTTPProvider("https://<chain-rpc-url>"))
+w3.middleware_onion.inject(SignAndSendRawMiddlewareBuilder.build(account), layer=0)
+
+prepared = sdk.publish_prepare("transformation", "shift")
+if isinstance(prepared, PreparedPublication):
+    tx = prepared.transaction  # hex quantities, as eth_sendTransaction expects
+    tx_hash = w3.eth.send_transaction({
+        "from": tx.from_,
+        "to": tx.to,
+        "data": tx.data,
+        "chainId": int(tx.chain_id, 16),
+        "gas": int(tx.gas, 16),
+    }).to_0x_hex()
+
+    # Confirm looks the receipt up once; repeat while it is still pending.
+    confirmed = sdk.publish_confirm("transformation", "shift", prepared.content_hash, tx_hash)
+    while confirmed.status == "pending":
+        time.sleep(3)
+        confirmed = sdk.publish_confirm("transformation", "shift", prepared.content_hash, tx_hash)
+    print(confirmed.status, confirmed.tx_hash)  # "mined"
+# Otherwise AlreadyPublished: the registry already holds this exact entity.
+```
 
 ## Code Generation
 

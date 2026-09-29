@@ -268,7 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--spec-root", required=True)
     parser.add_argument("--output", required=True)
     parser.add_argument("--title", default="DCN Chain API")
-    parser.add_argument("--version", default="0.2.0")
+    parser.add_argument("--version", default="0.4.0")
     parser.add_argument("--keep-options", action="store_true")
     parser.add_argument(
         "--format",

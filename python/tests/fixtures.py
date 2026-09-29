@@ -6,6 +6,8 @@ import httpx
 
 ADDR = "0x1111111111111111111111111111111111111111"
 FORMAT = "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+HASH = "0x" + "c" * 64
+TX = "0x" + "d" * 64
 
 
 def make_json(data: object, status_code: int = 200) -> httpx.Response:
@@ -25,6 +27,42 @@ class ApiRouter:
         path = request.url.path
         method = request.method
         query = dict(request.url.params)
+
+        if "/publish/" in path and method == "POST":
+            body = json.loads(request.content.decode())
+            kind = path.split("/publish/", 1)[1].split("/")[0]
+            if path.endswith("/prepare"):
+                base = {"kind": kind, "name": body["name"], "address": ADDR, "content_hash": HASH}
+                if body["name"] == "done":
+                    return make_json({**base, "status": "published", "owner": ADDR})
+                return make_json({
+                    **base,
+                    "status": "prepared",
+                    "transaction": {
+                        "from": ADDR,
+                        "to": ADDR,
+                        "data": "0x1234",
+                        "chainId": "0x1",
+                        "gas": "0x5208",
+                    },
+                    "publication_nonce": 0,
+                    "deadline": 1790000000,
+                })
+            if body["tx_hash"] != TX:
+                return make_json(
+                    {"message": "not mined yet", "status": "pending", "tx_hash": body["tx_hash"]},
+                    202,
+                )
+            return make_json({
+                "status": "mined",
+                "kind": kind,
+                "name": body["name"],
+                "tx_hash": body["tx_hash"],
+                "block_number": 8,
+                "address": ADDR,
+                "owner": ADDR,
+                "content_hash": body["content_hash"],
+            }, 201)
 
         if path.endswith("/version") and method == "GET":
             return make_json({"version": "0.4.0", "build_timestamp": "2026-04-30T00:00:00Z"})
@@ -80,6 +118,7 @@ class ApiRouter:
                 "dimensions": [{"transformations": [{"name": "identity", "args": []}]}],
                 "condition_name": "",
                 "condition_args": [],
+                "static_ri": {},
                 "owner": ADDR,
                 "address": "0x0",
                 "format_hash": FORMAT,
@@ -98,11 +137,13 @@ class ApiRouter:
                 "name": path.rsplit("/", 1)[1],
                 "owner": ADDR,
                 "address": "0x0",
-                "sol_src": "return x;",
+                "args_count": 1,
             })
         if path.endswith("/transformation") and method == "POST":
             body = json.loads(request.content.decode())
-            return make_json({"name": body["name"], "owner": ADDR, "address": "0x0"}, 201)
+            return make_json(
+                {"name": body["name"], "owner": ADDR, "address": "0x0", "args_count": 1}, 201
+            )
 
         if "/condition/" in path and method == "HEAD":
             return httpx.Response(404 if path.endswith("/missing") else 200)
@@ -111,15 +152,26 @@ class ApiRouter:
                 "name": path.rsplit("/", 1)[1],
                 "owner": ADDR,
                 "address": "0x0",
-                "sol_src": "return true;",
+                "args_count": 0,
             })
         if path.endswith("/condition") and method == "POST":
             body = json.loads(request.content.decode())
-            return make_json({"name": body["name"], "owner": ADDR, "address": "0x0"}, 201)
+            return make_json(
+                {"name": body["name"], "owner": ADDR, "address": "0x0", "args_count": 0}, 201
+            )
 
         if path.endswith("/execute") and method == "POST":
             body = json.loads(request.content.decode())
-            return make_json([{"path": f"/{body['connector_name']}", "data": [1, 2, 3]}])
+            return make_json({
+                "block_number": 7,
+                "block_hash": "0x" + "b" * 64,
+                "runner": ADDR,
+                "particles": [{"path": f"/{body['connector_name']}", "data": [1, 2, 3]}],
+            })
+
+        if path.endswith("/simulate") and method == "POST":
+            body = json.loads(request.content.decode())
+            return make_json([{"path": f"/{body['connector_name']}", "data": [4, 5]}])
 
         if path.endswith("/formats") and method == "GET":
             return make_json({
