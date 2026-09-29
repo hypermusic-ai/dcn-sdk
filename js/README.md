@@ -51,13 +51,14 @@ console.log(connector.format_hash);
 const feed = await sdk.feed({ limit: 10, includeUnfinalized: true });
 console.log(feed.items.map((item) => item.payload.name));
 
-const wallet = Wallet.createRandom();
-await sdk.loginWithWallet(wallet);
-
+// Execution needs no login.
 const result = await sdk.execute('pitch', 8, {
   '0': { start_point: 12, transformation_shift: 3 },
 });
 console.log(result.block_number, result.particles);
+
+const wallet = Wallet.createRandom();
+await sdk.loginWithWallet(wallet);
 
 // Entities created through *Post are local until published by their owner.
 await sdk.transformationPost({ name: 'shift', sol_src: 'return x + 1;' });

@@ -52,9 +52,9 @@ class TestDcnClient(unittest.TestCase):
         self.assertNotIn("authorization", self.last_request().headers)
 
         self.client.execute("pitch", 8)
-        self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
+        self.assertNotIn("authorization", self.last_request().headers)
         self.client.simulate("pitch", 8)
-        self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
+        self.assertNotIn("authorization", self.last_request().headers)
         self.client.publish_prepare("connector", "pitch")
         self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
         self.client.publish_send("connector", "pitch", HASH, "0x02abcd")

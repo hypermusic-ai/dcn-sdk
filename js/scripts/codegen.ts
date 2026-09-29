@@ -10,12 +10,8 @@ const specRoot = resolve(repoRoot, 'submodules', 'dcn-api-spec');
 const specOutput = resolve(repoRoot, 'build', 'openapi', 'dcn-sdk.openapi.yaml');
 const outputDir = resolve(sdkDir, 'src', 'generated');
 const bundleOpenapi = resolve(sdkDir, 'scripts', 'bundle-openapi.mjs');
-const generatorBin = resolve(
-  sdkDir,
-  'node_modules',
-  '.bin',
-  process.platform === 'win32' ? 'openapi.cmd' : 'openapi'
-);
+// Run the generator's JS entry with node: Windows refuses to spawn the .cmd shim without a shell.
+const generatorBin = resolve(sdkDir, 'node_modules', 'openapi-typescript-codegen', 'bin', 'index.js');
 
 function fail(message: string): never {
   throw new Error(
@@ -52,8 +48,9 @@ if (bundleResult.status !== 0) {
 }
 
 const result = spawnSync(
-  generatorBin,
+  process.execPath,
   [
+    generatorBin,
     '--input',
     specOutput,
     '--output',
@@ -72,5 +69,6 @@ const result = spawnSync(
 );
 
 if (result.status !== 0) {
+  if (result.error) console.error(result.error);
   process.exit(result.status ?? 1);
 }

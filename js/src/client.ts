@@ -152,7 +152,7 @@ export type FeedPage = GeneratedFeedPage;
 export interface DcnClientOptions {
     /** Chain API base URL. Defaults to `DCN_API_BASE` or `https://api.decentralised.art/chain`. */
     baseUrl?: string;
-    /** Bearer access token used for protected create/publish/execute endpoints. */
+    /** Bearer access token used for protected create/publish endpoints. */
     accessToken?: string | null;
     /** Fetch implementation to use. Useful for tests, custom runtimes, or instrumentation. */
     fetch?: typeof fetch;
@@ -280,8 +280,6 @@ function needsAuth(options: ApiRequestOptions): boolean {
         options.url === '/connector' ||
         options.url === '/condition' ||
         options.url === '/transformation' ||
-        options.url === '/execute' ||
-        options.url === '/simulate' ||
         options.url.startsWith('/publish/')
     );
 }
@@ -553,7 +551,7 @@ export class DcnClient {
      *
      * Result is pinned to `block_number`/`block_hash` on `runner`, so anyone can re-check it.
      * `particlesCount` accepts protobuf JSON uint32 values between 1 and 65536.
-     * Requires bearer authentication.
+     * No login required.
      */
     async execute(
         connectorName: string,
@@ -571,7 +569,7 @@ export class DcnClient {
      * Execute a connector in the server's local simulation EVM.
      *
      * Covers entities created on this server before they are published on chain.
-     * Requires bearer authentication.
+     * No login required.
      */
     async simulate(
         connectorName: string,

@@ -33,15 +33,16 @@ print(connector.format_hash)
 feed = sdk.feed(limit=10, include_unfinalized=True)
 print([item.payload.name for item in feed.items])
 
-account = Account.create()
-sdk.login_with_account(account)
-
+# Execution needs no login.
 result = sdk.execute(
     "pitch",
     8,
     {"0": {"start_point": 12, "transformation_shift": 3}},
 )
 print(result.block_number, result.particles[0].path)
+
+account = Account.create()
+sdk.login_with_account(account)
 
 # Entities created through *_post are local until published by their owner.
 sdk.transformation_post({"name": "shift", "sol_src": "return x + 1;"})

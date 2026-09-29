@@ -171,7 +171,7 @@ class Client:
     """Chain API base URL."""
 
     access_token: Optional[str] = None
-    """Bearer access token used for protected create/publish/execute endpoints."""
+    """Bearer access token used for protected create/publish endpoints."""
 
     timeout: float = 15.0
     """HTTP request timeout in seconds."""
@@ -462,17 +462,16 @@ class Client:
 
         The result is pinned to `block_number`/`block_hash` on `runner`, so
         anyone can re-check it. `particles_count` accepts protobuf JSON uint32
-        values between 1 and 65536. Requires bearer authentication.
+        values between 1 and 65536. No login required.
         """
-        with self._auth_headers() as client:
-            return _expect(
-                self._call(
-                    post_execute,
-                    client,
-                    body=_execute_request(connector_name, particles_count, dynamic_ri),
-                ),
-                ExecuteResponse,
-            )
+        return _expect(
+            self._call(
+                post_execute,
+                self._generated,
+                body=_execute_request(connector_name, particles_count, dynamic_ri),
+            ),
+            ExecuteResponse,
+        )
 
     def simulate(
         self,
@@ -483,17 +482,16 @@ class Client:
         """Execute a connector in the server's local simulation EVM.
 
         Covers entities created on this server before they are published on
-        chain. Requires bearer authentication.
+        chain. No login required.
         """
-        with self._auth_headers() as client:
-            return _expect_list(
-                self._call(
-                    post_simulate,
-                    client,
-                    body=_execute_request(connector_name, particles_count, dynamic_ri),
-                ),
-                ParticlesResultItem,
-            )
+        return _expect_list(
+            self._call(
+                post_simulate,
+                self._generated,
+                body=_execute_request(connector_name, particles_count, dynamic_ri),
+            ),
+            ParticlesResultItem,
+        )
 
     def publish_prepare(
         self,
