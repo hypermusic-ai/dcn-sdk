@@ -18,7 +18,8 @@ describe('DCN JS auth facade', () => {
     await sdk.execute('pitch', 8);
     await sdk.simulate('pitch', 8);
     await sdk.publishPrepare('connector', 'pitch');
-    for (const { init } of globalThis.__lastRequests.slice(-3)) {
+    await sdk.publishSend('connector', { name: 'pitch', content_hash: `0x${'c'.repeat(64)}`, raw_tx: '0x02abcd' });
+    for (const { init } of globalThis.__lastRequests.slice(-4)) {
       expect(new Headers(init?.headers as HeadersInit).get('Authorization')).toBe('Bearer access-123');
     }
   });

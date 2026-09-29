@@ -3,6 +3,64 @@ import { DcnClient } from '../src/client';
 import type { DcnApiError } from '../src/client';
 import { ADDR, FORMAT, HASH, TX, json } from './fixtures';
 
+const SIGNING = {
+  type: '0x2',
+  nonce: '0x7',
+  maxFeePerGas: '0xd09dc300',
+  maxPriorityFeePerGas: '0x59682f00',
+  value: '0x0',
+} as const;
+const TRANSACTION = { from: ADDR, to: ADDR, data: '0x1234', chainId: '0x1', gas: '0x5208' };
+
+// A server that prepares for relay, relays, and answers pending until `minedAfter` checks.
+function relayServer(minedAfter: number) {
+  const calls: Array<{ path: string; body: unknown }> = [];
+  let confirmChecks = 0;
+  const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = new URL(String(input)).pathname.replace('/chain', '');
+    if (path.startsWith('/nonce/')) return json({ nonce: 'abcd-efgh' });
+    if (path === '/auth') return json({ access_token: 'access-123' });
+    const body = JSON.parse(init?.body as string) as { name: string; tx_hash?: string };
+    calls.push({ path, body });
+    if (path.endsWith('/prepare')) {
+      const base = { kind: 'transformation', name: body.name, address: ADDR, content_hash: HASH };
+      if (body.name === 'done') return json({ ...base, status: 'published', owner: ADDR });
+      return json({
+        ...base,
+        status: 'prepared',
+        transaction: TRANSACTION,
+        publication_nonce: 0,
+        deadline: 1790000000,
+        signing: SIGNING,
+      });
+    }
+    if (path.endsWith('/send')) return json({ status: 'pending', tx_hash: TX }, 202);
+    confirmChecks += 1;
+    if (confirmChecks < minedAfter) return json({ message: 'not mined yet', status: 'pending', tx_hash: TX }, 202);
+    return json({
+      status: 'mined',
+      kind: 'transformation',
+      name: body.name,
+      tx_hash: TX,
+      block_number: 8,
+      address: ADDR,
+      owner: ADDR,
+      content_hash: HASH,
+    }, 201);
+  });
+  const client = new DcnClient({ baseUrl: 'https://example.invalid/chain', accessToken: 'token', fetch });
+  return { client, calls };
+}
+
+// An ethers-style wallet: signs login messages and transactions.
+function ethersWallet() {
+  return {
+    address: ADDR,
+    signMessage: vi.fn(async () => '0xSIG'),
+    signTransaction: vi.fn(async () => '0x02ef01'),
+  };
+}
+
 describe('DCN JS SDK wrapper', () => {
   let sdk: DcnClient;
 
@@ -200,6 +258,116 @@ describe('DCN JS SDK wrapper', () => {
     expect(mined).toMatchObject({ status: 'mined', kind: 'connector', name: 'pitch', block_number: 8 });
     last = globalThis.__lastRequests.at(-1)!;
     expect(last.input).toBe('https://example.invalid/chain/publish/connector');
+  });
+
+  it('publishes through the relay: prepare, sign offline, send, confirm until mined', async () => {
+    const { client, calls } = relayServer(2);
+    const signTransaction = vi.fn(async () => '0x02abcd');
+
+    const out = await client.publish('transformation', 'shift', {
+      signer: { address: ADDR, signTransaction },
+      pollIntervalMs: 0,
+    });
+    expect(out).toMatchObject({ status: 'mined', block_number: 8, tx_hash: TX });
+    expect(signTransaction).toHaveBeenCalledWith({ ...TRANSACTION, ...SIGNING });
+    expect(calls.map(({ path }) => path)).toEqual([
+      '/publish/transformation/prepare',
+      '/publish/transformation/send',
+      '/publish/transformation',
+      '/publish/transformation',
+    ]);
+    expect(calls.map(({ body }) => body)).toEqual([
+      { name: 'shift', relay: true },
+      { name: 'shift', content_hash: HASH, raw_tx: '0x02abcd' },
+      { name: 'shift', content_hash: HASH, tx_hash: TX },
+      { name: 'shift', content_hash: HASH, tx_hash: TX },
+    ]);
+  });
+
+  it('publish signs nothing for another owner, another chain, a higher fee, or an existing publication', async () => {
+    const { client } = relayServer(1);
+    const signTransaction = vi.fn(async () => '0x02abcd');
+
+    const signer = { signTransaction };
+
+    await expect(client.publish('transformation', 'shift', { signer: { address: `0x${'22'.repeat(20)}`, signTransaction } }))
+      .rejects.toThrow(/not the entity owner/);
+    await expect(client.publish('transformation', 'shift', { signer, chainId: 5 }))
+      .rejects.toThrow(/chain 1, not 5/);
+    await expect(client.publish('transformation', 'shift', { signer, maxFeePerGas: 1_000_000_000n }))
+      .rejects.toThrow(/exceeds the limit/);
+    await expect(client.publish('transformation', 'done', { signer }))
+      .resolves.toMatchObject({ status: 'published', address: ADDR });
+    expect(signTransaction).not.toHaveBeenCalled();
+
+    // Limits the prepared transaction satisfies do not get in the way.
+    await expect(client.publish('transformation', 'shift', { signer, chainId: '0x1', maxFeePerGas: 3_500_000_000 }))
+      .resolves.toMatchObject({ status: 'mined' });
+  });
+
+  it('publish gives up after the configured confirmation attempts', async () => {
+    const { client, calls } = relayServer(Number.POSITIVE_INFINITY);
+    await expect(client.publish('transformation', 'shift', {
+      signer: { signTransaction: async () => '0x02abcd' },
+      pollIntervalMs: 0,
+      maxConfirmAttempts: 3,
+    })).rejects.toThrow(`Publication ${TX} is not mined yet`);
+    expect(calls.filter(({ path }) => path === '/publish/transformation')).toHaveLength(3);
+  });
+
+  it('publish signs with the wallet used to log in, in the shape ethers expects', async () => {
+    const { client, calls } = relayServer(1);
+    const wallet = ethersWallet();
+    await client.loginWithWallet(wallet);
+
+    await expect(client.publish('transformation', 'shift')).resolves.toMatchObject({ status: 'mined' });
+    expect(wallet.signTransaction).toHaveBeenCalledWith({
+      type: 2,
+      chainId: 1n,
+      nonce: 7,
+      to: TRANSACTION.to,
+      data: TRANSACTION.data,
+      gasLimit: 0x5208n,
+      maxFeePerGas: 3_500_000_000n,
+      maxPriorityFeePerGas: 1_500_000_000n,
+      value: 0n,
+    });
+    expect(calls.find(({ path }) => path.endsWith('/send'))?.body).toMatchObject({ raw_tx: '0x02ef01' });
+
+    // An explicit signer takes precedence over the remembered wallet.
+    const signTransaction = vi.fn(async () => '0x02abcd');
+    await client.publish('transformation', 'shift', { signer: { signTransaction } });
+    expect(signTransaction).toHaveBeenCalledOnce();
+    expect(wallet.signTransaction).toHaveBeenCalledOnce();
+  });
+
+  it('publish has no signer without a transaction-signing login, and fails before preparing', async () => {
+    const { client, calls } = relayServer(1);
+
+    // Nobody logged in.
+    await expect(client.publish('transformation', 'shift')).rejects.toThrow(/No signer/);
+
+    // A wallet that only signs messages, as a browser wallet exposes it.
+    await client.loginWithWallet({ address: ADDR, signMessage: async () => '0xSIG' });
+    await expect(client.publish('transformation', 'shift')).rejects.toThrow(/No signer/);
+
+    // A signature login forgets the wallet of an earlier login.
+    await client.loginWithWallet(ethersWallet());
+    await client.loginWithSignature(ADDR, 'Login nonce: abcd-efgh', '0xSIG');
+    await expect(client.publish('transformation', 'shift')).rejects.toThrow(/No signer/);
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it('prepares for relay and sends a signed publication', async () => {
+    const { client, calls } = relayServer(1);
+    const prepared = await client.publishPrepare('transformation', 'shift', { relay: true });
+    if (prepared.status !== 'prepared') throw new Error(`unexpected status ${prepared.status}`);
+    expect(prepared.signing).toEqual(SIGNING);
+
+    const sent = await client.publishSend('transformation', { name: 'shift', content_hash: HASH, raw_tx: '0x02abcd' });
+    expect(sent).toEqual({ status: 'pending', tx_hash: TX });
+    expect(calls.map(({ path }) => path)).toEqual(['/publish/transformation/prepare', '/publish/transformation/send']);
   });
 
   it('lists formats, fetches format membership, and fetches feed pages', async () => {

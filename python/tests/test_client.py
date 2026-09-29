@@ -15,7 +15,9 @@ from dcn.client import (
     PublishError,
 )
 
-from fixtures import ADDR, FORMAT, HASH, TX, ApiRouter
+from eth_account import Account
+
+from fixtures import ADDR, FORMAT, HASH, SIGNING, TX, ApiRouter
 
 
 class TestDcnClient(unittest.TestCase):
@@ -54,6 +56,8 @@ class TestDcnClient(unittest.TestCase):
         self.client.simulate("pitch", 8)
         self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
         self.client.publish_prepare("connector", "pitch")
+        self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
+        self.client.publish_send("connector", "pitch", HASH, "0x02abcd")
         self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
 
     def test_account_endpoints(self) -> None:
@@ -180,6 +184,108 @@ class TestDcnClient(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             self.client.publish_prepare("bogus", "pitch")
+
+    def test_publish_prepare_for_relay_and_send(self) -> None:
+        prepared = self.client.publish_prepare("transformation", "shift", relay=True)
+        assert isinstance(prepared, PreparedPublication)
+        self.assertEqual(
+            json.loads(self.last_request().content.decode()),
+            {"name": "shift", "relay": True},
+        )
+        self.assertEqual(prepared.to_dict()["signing"], SIGNING)
+
+        sent = self.client.publish_send("transformation", "shift", HASH, "0x02abcd")
+        self.assertEqual(sent.tx_hash, TX)
+        self.assertEqual(
+            str(self.last_request().url),
+            "https://example.invalid/chain/publish/transformation/send",
+        )
+        self.assertEqual(
+            json.loads(self.last_request().content.decode()),
+            {"name": "shift", "content_hash": HASH, "raw_tx": "0x02abcd"},
+        )
+
+    def test_publish_signs_locally_relays_and_confirms_until_mined(self) -> None:
+        account = Account.from_key("0x" + "51" * 32)
+        self.router.owner = account.address
+        self.router.pending_confirms = 1
+
+        mined = self.client.publish("transformation", "shift", account, poll_interval=0)
+        assert isinstance(mined, ConfirmResponse)
+        self.assertEqual(mined.tx_hash, TX)
+
+        paths = [request.url.path for request in self.router.requests]
+        self.assertEqual(paths, [
+            "/chain/publish/transformation/prepare",
+            "/chain/publish/transformation/send",
+            "/chain/publish/transformation",
+            "/chain/publish/transformation",
+        ])
+        sent = json.loads(self.router.requests[1].content.decode())
+        self.assertEqual(sent["name"], "shift")
+        self.assertEqual(sent["content_hash"], HASH)
+        # A real type-2 transaction the owner's key signed.
+        self.assertTrue(sent["raw_tx"].startswith("0x02"))
+        self.assertEqual(Account.recover_transaction(sent["raw_tx"]), account.address)
+
+    def test_publish_signs_with_the_account_used_to_log_in(self) -> None:
+        account = Account.from_key("0x" + "51" * 32)
+        self.router.owner = account.address
+
+        # No account has logged in yet, and nothing is prepared without one.
+        with self.assertRaises(RuntimeError):
+            self.client.publish("transformation", "shift")
+        self.assertEqual(self.router.requests, [])
+
+        self.client.login_with_account(account)
+        mined = self.client.publish("transformation", "shift", poll_interval=0)
+        self.assertIsInstance(mined, ConfirmResponse)
+        sent = next(
+            json.loads(request.content.decode())
+            for request in self.router.requests
+            if request.url.path.endswith("/send")
+        )
+        self.assertEqual(Account.recover_transaction(sent["raw_tx"]), account.address)
+
+        # A signature login forgets the account of an earlier login.
+        self.client.login_with_signature(account.address, "Login nonce: abcd-efgh", "0xSIG")
+        with self.assertRaises(RuntimeError):
+            self.client.publish("transformation", "shift")
+
+    def test_publish_signs_nothing_it_should_not(self) -> None:
+        account = Account.from_key("0x" + "51" * 32)
+
+        # Prepared for a different owner.
+        with self.assertRaises(ValueError):
+            self.client.publish("transformation", "shift", account)
+
+        self.router.owner = account.address
+        with self.assertRaises(ValueError):
+            self.client.publish("transformation", "shift", account, chain_id=5)
+        with self.assertRaises(ValueError):
+            self.client.publish("transformation", "shift", account, max_fee_per_gas=1_000_000_000)
+
+        existing = self.client.publish("transformation", "done", account)
+        self.assertIsInstance(existing, AlreadyPublished)
+        paths = [request.url.path for request in self.router.requests]
+        self.assertFalse(any(path.endswith("/send") for path in paths))
+
+        mined = self.client.publish(
+            "transformation", "shift", account, chain_id=1, max_fee_per_gas=3_500_000_000
+        )
+        self.assertIsInstance(mined, ConfirmResponse)
+
+    def test_publish_gives_up_after_the_configured_confirmation_attempts(self) -> None:
+        account = Account.from_key("0x" + "51" * 32)
+        self.router.owner = account.address
+        self.router.pending_confirms = 10
+
+        with self.assertRaises(TimeoutError):
+            self.client.publish(
+                "transformation", "shift", account, poll_interval=0, max_confirm_attempts=3
+            )
+        paths = [request.url.path for request in self.router.requests]
+        self.assertEqual(paths.count("/chain/publish/transformation"), 3)
 
     def test_format_and_feed_endpoints(self) -> None:
         self.assertEqual(self.client.list_formats(limit=4, after=FORMAT).formats, [FORMAT])

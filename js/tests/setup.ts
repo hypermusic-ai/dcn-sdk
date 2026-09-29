@@ -78,6 +78,11 @@ beforeEach(() => {
       });
     }
 
+    const sendMatch = pathname.match(/\/publish\/([^/]+)\/send$/);
+    if (sendMatch && method === 'POST') {
+      return json({ status: 'pending', tx_hash: TX }, 202);
+    }
+
     const confirmMatch = pathname.match(/\/publish\/([^/]+)$/);
     if (confirmMatch && method === 'POST') {
       const body = await requestJson(init);

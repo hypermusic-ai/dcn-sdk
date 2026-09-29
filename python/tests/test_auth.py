@@ -40,7 +40,7 @@ class TestDcnAuth(unittest.TestCase):
     def test_login_with_account_sets_access_token(self) -> None:
         account = SimpleNamespace(address=ADDR)
         with patch("dcn.client.sign_login_nonce", return_value=("Login nonce: abcd-efgh", "0xSIG")):
-            out = self.client.login_with_account(account)  # type: ignore[arg-type]
+            out = self.client.login_with_account(account)
         self.assertEqual(out.access_token, "access-123")
         self.assertEqual(self.client.access_token, "access-123")
 

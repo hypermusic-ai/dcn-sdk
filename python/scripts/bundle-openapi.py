@@ -187,9 +187,27 @@ class SpecBundler:
         if isinstance(ref, str):
             return self.resolve_ref(ref, current_file)
         return {
-            key: self.resolve_node(value, current_file)
+            key: (
+                self.resolve_discriminator(value, current_file)
+                if key == "discriminator"
+                else self.resolve_node(value, current_file)
+            )
             for key, value in node_map.items()
         }
+
+    def resolve_discriminator(self, node: object, current_file: Path) -> object:
+        # Mapping values are schema refs written as bare strings; point them at
+        # the hoisted components.
+        resolved = copy.deepcopy(node)
+        discriminator = optional_map(resolved)
+        mapping = optional_map(discriminator.get("mapping")) if discriminator else None
+        if discriminator is None or mapping is None:
+            return resolved
+        discriminator["mapping"] = {
+            name: cast(JsonMap, self.resolve_ref(str(ref), current_file))["$ref"]
+            for name, ref in mapping.items()
+        }
+        return discriminator
 
     def resolve_ref(self, ref: str, current_file: Path) -> object:
         ref_file, pointer = self.split_ref(ref, current_file)

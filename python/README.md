@@ -53,9 +53,25 @@ Set `DCN_API_BASE` or pass `Client(base_url=...)` to target another chain API.
 
 ### Publishing on chain
 
-The owner's wallet sends and pays for the publication; the server never signs it.
-Example with [web3.py](https://web3py.readthedocs.io/) v7 (not an SDK dependency)
-and the same `account` used to log in:
+The owner pays for the publication and the server never holds their key. `publish`
+needs no chain RPC endpoint. It prepares the publication, signs it locally with the
+account passed to `login_with_account` (or one you pass explicitly), lets the server
+broadcast it through its own node, and confirms it until mined:
+
+```python
+result = sdk.publish(
+    "transformation",
+    "shift",
+    max_fee_per_gas=50_000_000_000,  # refuse to sign above 50 gwei
+)
+print(type(result).__name__)  # ConfirmResponse, or AlreadyPublished if it already was
+```
+
+The steps are also available one by one: `publish_prepare(kind, name, relay=True)`,
+`publish_send(kind, name, content_hash, raw_tx)` and `publish_confirm`.
+
+To send the transaction yourself instead, for example through your own node with
+[web3.py](https://web3py.readthedocs.io/) v7 (not an SDK dependency):
 
 ```python
 import time

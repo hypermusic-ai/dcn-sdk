@@ -1,13 +1,15 @@
 from __future__ import annotations
 
 import os
+import time
 from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from http import HTTPStatus
 from typing import Any, Generator, Mapping, Optional, TypeVar, Union, cast
 
 import httpx
-from eth_account import Account
+from eth_account.signers.local import LocalAccount
+from eth_typing import HexStr
 
 from .crypto import sign_login_nonce
 from .dcn_api_client.api.account import get_account, get_accounts
@@ -25,7 +27,11 @@ from .dcn_api_client.api.connector import (
 from .dcn_api_client.api.core import get_version
 from .dcn_api_client.api.feed import get_feed
 from .dcn_api_client.api.format_ import get_format, get_formats
-from .dcn_api_client.api.publish import post_publish_confirm, post_publish_prepare
+from .dcn_api_client.api.publish import (
+    post_publish_confirm,
+    post_publish_prepare,
+    post_publish_send,
+)
 from .dcn_api_client.api.runner import post_execute, post_simulate
 from .dcn_api_client.api.transformation import (
     get_transformation,
@@ -66,6 +72,8 @@ from .dcn_api_client.models.particles_result_item import ParticlesResultItem
 from .dcn_api_client.models.prepare_request import PrepareRequest
 from .dcn_api_client.models.prepared_publication import PreparedPublication
 from .dcn_api_client.models.publish_error import PublishError
+from .dcn_api_client.models.send_request import SendRequest
+from .dcn_api_client.models.send_response import SendResponse
 from .dcn_api_client.models.running_instance import RunningInstance
 from .dcn_api_client.models.transformation_info_response import TransformationInfoResponse
 from .dcn_api_client.models.version_response import VersionResponse
@@ -175,6 +183,8 @@ class Client:
     """Optional custom httpx transport for tests or instrumentation."""
 
     def __post_init__(self) -> None:
+        # The account of the last login_with_account; publish signs with it by default.
+        self._account: Optional[LocalAccount] = None
         base = (self.base_url or os.getenv("DCN_API_BASE") or DEFAULT_BASE).rstrip("/")
         timeout = httpx.Timeout(self.timeout)
         self._client = httpx.Client(
@@ -267,6 +277,7 @@ class Client:
         """Authenticate using an address, signed login message, and signature.
 
         Stores the returned bearer token on this client for protected endpoints.
+        No account is known afterwards, so `publish` needs an explicit account.
         """
         resp = _expect(
             self._call(
@@ -277,17 +288,20 @@ class Client:
             AuthResponse,
         )
         self.access_token = resp.access_token
+        self._account = None
         return resp
 
-    def login_with_account(self, account: Account) -> AuthResponse:
+    def login_with_account(self, account: LocalAccount) -> AuthResponse:
         """Authenticate with an eth-account account.
 
-        Fetches a nonce, signs `Login nonce: <nonce>`, then stores the returned bearer token.
+        Fetches a nonce, signs `Login nonce: <nonce>`, then stores the returned
+        bearer token. The account also becomes the default signer of `publish`.
         """
-        address = cast(str, getattr(account, "address"))
-        nonce = self.get_nonce(address).nonce
+        nonce = self.get_nonce(account.address).nonce
         message, signature = sign_login_nonce(account, nonce)
-        return self.login_with_signature(address, message, signature)
+        resp = self.login_with_signature(account.address, message, signature)
+        self._account = account
+        return resp
 
     def list_accounts(self, *, limit: int = 50, after: Optional[str] = None) -> AccountListResponse:
         """List chain accounts known to the registry.
@@ -485,19 +499,23 @@ class Client:
         self,
         kind: EntityKind | str,
         name: str,
+        *,
+        relay: bool = False,
     ) -> PreparedPublication | AlreadyPublished:
         """Prepare on-chain publication of an entity created on this server.
 
         Returns a `PreparedPublication` whose unsigned `transaction` the owner's
         wallet must send (`eth_sendTransaction`), or `AlreadyPublished` when the
-        registry already holds it. Requires bearer authentication.
+        registry already holds it. With `relay`, it also carries `signing`
+        (account nonce and fees) so the transaction can be signed offline and
+        sent with `publish_send`. Requires bearer authentication.
         """
         with self._auth_headers() as client:
             response = self._call(
                 post_publish_prepare,
                 client,
                 EntityKind(kind),
-                body=PrepareRequest(name=name),
+                body=PrepareRequest(name=name, relay=True if relay else UNSET),
             )
         if isinstance(response.parsed, (PreparedPublication, AlreadyPublished)):
             return response.parsed
@@ -526,6 +544,106 @@ class Client:
         if isinstance(response.parsed, (ConfirmResponse, PublishError)):
             return response.parsed
         raise DcnApiError(int(response.status_code), _decode_error(response))
+
+    def publish_send(
+        self,
+        kind: EntityKind | str,
+        name: str,
+        content_hash: str,
+        raw_tx: str,
+    ) -> SendResponse:
+        """Broadcast a publication transaction the owner signed offline.
+
+        The server checks that the caller signed it and that it publishes
+        exactly this entity, then broadcasts it through its own chain provider
+        and answers with its `tx_hash`; confirm it with `publish_confirm`. The
+        owner still pays for it. Requires bearer authentication.
+        """
+        with self._auth_headers() as client:
+            return _expect(
+                self._call(
+                    post_publish_send,
+                    client,
+                    EntityKind(kind),
+                    body=SendRequest(name=name, content_hash=content_hash, raw_tx=raw_tx),
+                ),
+                SendResponse,
+            )
+
+    def publish(
+        self,
+        kind: EntityKind | str,
+        name: str,
+        account: Optional[LocalAccount] = None,
+        *,
+        max_fee_per_gas: Optional[int] = None,
+        chain_id: Optional[int] = None,
+        poll_interval: float = 3.0,
+        max_confirm_attempts: int = 200,
+    ) -> ConfirmResponse | AlreadyPublished:
+        """Publish an entity without a chain RPC endpoint.
+
+        Prepares the publication for relay, signs it locally with `account`
+        (by default the account of `login_with_account`), lets the server
+        broadcast it, and confirms it until it is mined. Returns the
+        confirmation, or `AlreadyPublished` when the registry already holds
+        this exact publication (nothing is signed then). `max_fee_per_gas`
+        (wei) and `chain_id` refuse to sign anything else. The owner pays for
+        the transaction. Requires bearer authentication.
+        """
+        account = account or self._account
+        if account is None:
+            raise RuntimeError(
+                "no account to sign with: log in with login_with_account or pass an account"
+            )
+
+        prepared = self.publish_prepare(kind, name, relay=True)
+        if isinstance(prepared, AlreadyPublished):
+            return prepared
+
+        signing = prepared.signing
+        if isinstance(signing, Unset):
+            raise RuntimeError(
+                "the server returned no signing fields; it does not support relayed publication"
+            )
+        transaction = prepared.transaction
+        if account.address.lower() != transaction.from_.lower():
+            raise ValueError(
+                f"the account {account.address} is not the entity owner {transaction.from_}"
+            )
+        transaction_chain_id = int(transaction.chain_id, 16)
+        if chain_id is not None and chain_id != transaction_chain_id:
+            raise ValueError(
+                f"the publication is for chain {transaction_chain_id}, not {chain_id}"
+            )
+        max_fee = int(signing.max_fee_per_gas, 16)
+        if max_fee_per_gas is not None and max_fee > max_fee_per_gas:
+            raise ValueError(f"maxFeePerGas {max_fee} exceeds the limit {max_fee_per_gas}")
+
+        # A publication never transfers value, whatever the server returned.
+        signed = account.sign_transaction({
+            "type": 2,
+            "chainId": transaction_chain_id,
+            "nonce": int(signing.nonce, 16),
+            "to": HexStr(transaction.to),
+            "data": HexStr(transaction.data),
+            "gas": int(transaction.gas, 16),
+            "maxFeePerGas": max_fee,
+            "maxPriorityFeePerGas": int(signing.max_priority_fee_per_gas, 16),
+            "value": 0,
+        })
+        raw_tx = "0x" + bytes(signed.raw_transaction).hex()
+        sent = self.publish_send(kind, name, prepared.content_hash, raw_tx)
+
+        for attempt in range(1, max_confirm_attempts + 1):
+            confirmed = self.publish_confirm(kind, name, prepared.content_hash, sent.tx_hash)
+            if isinstance(confirmed, ConfirmResponse):
+                return confirmed
+            if attempt < max_confirm_attempts:
+                time.sleep(poll_interval)
+        raise TimeoutError(
+            f"publication {sent.tx_hash} is not mined yet; check it later with publish_confirm"
+        )
 
     def list_formats(self, *, limit: int = 50, after: Optional[str] = None) -> FormatListResponse:
         """List connector format hashes known to the registry.
