@@ -2,7 +2,7 @@
 requires = [
     "hatchling>=1.25",
     "hatch-vcs>=0.4",
-    "openapi-python-client>=0.25",
+    "openapi-python-client>=0.25,<0.29",
     "PyYAML>=6.0"
 ]
 build-backend = "hatchling.build"
@@ -69,7 +69,7 @@ test = [
   "coverage[toml]>=7.6",
   "flake8>=7.1",
   "mypy>=1.10",
-  "openapi-python-client>=0.25",
+  "openapi-python-client>=0.25,<0.29",
   "pyright>=1.1.390",
   "PyYAML>=6.0",
   "types-PyYAML>=6.0"

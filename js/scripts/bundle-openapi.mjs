@@ -203,7 +203,7 @@ class SpecBundler {
 }
 
 function parseArgs(argv) {
-    const args = { title: 'DCN Chain API', version: '0.2.0', keepOptions: false };
+    const args = { title: 'DCN Chain API', version: '0.4.0', keepOptions: false };
     for (let i = 0; i < argv.length; i += 1) {
         const arg = argv[i];
         switch (arg) {

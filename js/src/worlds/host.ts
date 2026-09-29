@@ -196,8 +196,8 @@ function requiredParticlesCount(
             : typeof value === 'string'
               ? decimalStringToBigInt(value, 'particlesCount')
               : undefined;
-    if (count === undefined || count > MAX_WORLD_PARTICLES_COUNT) {
-        throw new WorldBadRequestError("RPC parameter 'particlesCount' must be an integer between 0 and 65536");
+    if (count === undefined || count < 1n || count > MAX_WORLD_PARTICLES_COUNT) {
+        throw new WorldBadRequestError("RPC parameter 'particlesCount' must be an integer between 1 and 65536");
     }
     assertParticlesWithinLimits(count, limits);
     const validNumber =
@@ -273,7 +273,8 @@ function validateRpcParams(
                 ...(includeUnfinalized !== undefined ? { includeUnfinalized } : {}),
             };
         }
-        case 'execute': {
+        case 'execute':
+        case 'simulate': {
             const dynamicRi = optionalRunningInstances(value);
             return {
                 connectorName: requiredString(value, 'connectorName'),
@@ -311,7 +312,8 @@ async function dispatch(
         case 'feed':
             return client.feed(pick(params, ['limit', 'before', 'type', 'includeUnfinalized']));
         case 'execute':
-            return client.execute(
+        case 'simulate':
+            return client[method](
                 params.connectorName as string,
                 params.particlesCount as number | string,
                 params.dynamicRi as never

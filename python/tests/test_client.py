@@ -6,9 +6,16 @@ from unittest.mock import patch
 
 import httpx
 
-from dcn.client import Client, DcnApiError
+from dcn.client import (
+    AlreadyPublished,
+    Client,
+    ConfirmResponse,
+    DcnApiError,
+    PreparedPublication,
+    PublishError,
+)
 
-from fixtures import ADDR, FORMAT, ApiRouter
+from fixtures import ADDR, FORMAT, HASH, TX, ApiRouter
 
 
 class TestDcnClient(unittest.TestCase):
@@ -43,6 +50,10 @@ class TestDcnClient(unittest.TestCase):
         self.assertNotIn("authorization", self.last_request().headers)
 
         self.client.execute("pitch", 8)
+        self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
+        self.client.simulate("pitch", 8)
+        self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
+        self.client.publish_prepare("connector", "pitch")
         self.assertEqual(self.last_request().headers["authorization"], "Bearer access-123")
 
     def test_account_endpoints(self) -> None:
@@ -87,7 +98,7 @@ class TestDcnClient(unittest.TestCase):
     def test_transformation_and_condition_endpoints(self) -> None:
         self.assertTrue(self.client.transformation_exists("identity"))
         self.assertFalse(self.client.transformation_exists("missing"))
-        self.assertEqual(self.client.transformation_get("identity").sol_src, "return x;")
+        self.assertEqual(self.client.transformation_get("identity").args_count, 1)
         transformation = self.client.transformation_post({
             "name": "shift",
             "sol_src": "return x + 1;",
@@ -95,6 +106,7 @@ class TestDcnClient(unittest.TestCase):
         self.assertEqual(transformation.name, "shift")
         self.assertEqual(transformation.owner, ADDR)
         self.assertEqual(transformation.address, "0x0")
+        self.assertEqual(transformation.args_count, 1)
         self.assertEqual(
             json.loads(self.last_request().content.decode()),
             {"name": "shift", "sol_src": "return x + 1;"},
@@ -102,11 +114,12 @@ class TestDcnClient(unittest.TestCase):
 
         self.assertTrue(self.client.condition_exists("always"))
         self.assertFalse(self.client.condition_exists("missing"))
-        self.assertEqual(self.client.condition_get("always").sol_src, "return true;")
+        self.assertEqual(self.client.condition_get("always").args_count, 0)
         condition = self.client.condition_post({"name": "gate", "sol_src": "return true;"})
         self.assertEqual(condition.name, "gate")
         self.assertEqual(condition.owner, ADDR)
         self.assertEqual(condition.address, "0x0")
+        self.assertEqual(condition.args_count, 0)
         self.assertEqual(
             json.loads(self.last_request().content.decode()),
             {"name": "gate", "sol_src": "return true;"},
@@ -114,7 +127,9 @@ class TestDcnClient(unittest.TestCase):
 
     def test_execute_uses_post_body(self) -> None:
         out = self.client.execute("pitch", 8, {"0": {"start_point": 12, "transformation_shift": 3}})
-        self.assertEqual(out[0].path, "/pitch")
+        self.assertEqual(out.block_number, 7)
+        self.assertEqual(out.runner, ADDR)
+        self.assertEqual(out.particles[0].path, "/pitch")
         body = json.loads(self.last_request().content.decode())
         self.assertEqual(body["connector_name"], "pitch")
         self.assertEqual(body["particles_count"], 8)
@@ -125,6 +140,46 @@ class TestDcnClient(unittest.TestCase):
             json.loads(self.last_request().content.decode()),
             {"connector_name": "pitch", "particles_count": "8"},
         )
+
+    def test_simulate_uses_post_body(self) -> None:
+        out = self.client.simulate("pitch", 4, {"1": {"start_point": 0, "transformation_shift": 1}})
+        self.assertEqual([item.path for item in out], ["/pitch"])
+        self.assertEqual(str(self.last_request().url), "https://example.invalid/chain/simulate")
+        self.assertEqual(
+            json.loads(self.last_request().content.decode()),
+            {
+                "connector_name": "pitch",
+                "particles_count": 4,
+                "dynamic_ri": {"1": {"start_point": 0, "transformation_shift": 1}},
+            },
+        )
+
+    def test_publish_prepare_and_confirm(self) -> None:
+        prepared = self.client.publish_prepare("connector", "pitch")
+        assert isinstance(prepared, PreparedPublication)
+        self.assertEqual(prepared.transaction.chain_id, "0x1")
+        self.assertEqual(
+            str(self.last_request().url),
+            "https://example.invalid/chain/publish/connector/prepare",
+        )
+        self.assertEqual(json.loads(self.last_request().content.decode()), {"name": "pitch"})
+
+        self.assertIsInstance(self.client.publish_prepare("condition", "done"), AlreadyPublished)
+
+        pending = self.client.publish_confirm("connector", "pitch", HASH, "0x00")
+        assert isinstance(pending, PublishError)
+        self.assertEqual(pending.status, "pending")
+
+        mined = self.client.publish_confirm("connector", "pitch", HASH, TX)
+        assert isinstance(mined, ConfirmResponse)
+        self.assertEqual(mined.block_number, 8)
+        self.assertEqual(
+            str(self.last_request().url),
+            "https://example.invalid/chain/publish/connector",
+        )
+
+        with self.assertRaises(ValueError):
+            self.client.publish_prepare("bogus", "pitch")
 
     def test_format_and_feed_endpoints(self) -> None:
         self.assertEqual(self.client.list_formats(limit=4, after=FORMAT).formats, [FORMAT])

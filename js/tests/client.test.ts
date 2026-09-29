@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DcnClient } from '../src/client';
 import type { DcnApiError } from '../src/client';
-import { ADDR, FORMAT, json } from './fixtures';
+import { ADDR, FORMAT, HASH, TX, json } from './fixtures';
 
 describe('DCN JS SDK wrapper', () => {
   let sdk: DcnClient;
@@ -96,7 +96,7 @@ describe('DCN JS SDK wrapper', () => {
     expect(url).toContain('after_conditions=always');
   });
 
-  it('gets, checks, and publishes connectors', async () => {
+  it('gets, checks, and creates connectors', async () => {
     await expect(sdk.connectorExists('pitch')).resolves.toBe(true);
     await expect(sdk.connectorExists('missing')).resolves.toBe(false);
 
@@ -121,12 +121,12 @@ describe('DCN JS SDK wrapper', () => {
     });
   });
 
-  it('gets, checks, and publishes transformations and conditions', async () => {
+  it('gets, checks, and creates transformations and conditions', async () => {
     await expect(sdk.transformationExists('identity')).resolves.toBe(true);
     await expect(sdk.transformationExists('missing')).resolves.toBe(false);
-    expect((await sdk.transformationGet('identity')).sol_src).toBe('return x;');
+    expect(await sdk.transformationGet('identity')).toEqual({ name: 'identity', args_count: 1, owner: ADDR, address: '0x0' });
     const transformation = await sdk.transformationPost({ name: 'shift', sol_src: 'return x + 1;' });
-    expect(transformation).toEqual({ name: 'shift', owner: ADDR, address: '0x0' });
+    expect(transformation).toEqual({ name: 'shift', owner: ADDR, address: '0x0', args_count: 1 });
     expect(transformation).not.toHaveProperty('sol_src');
     expect(JSON.parse(globalThis.__lastRequests.at(-1)!.init?.body as string)).toEqual({
       name: 'shift',
@@ -135,9 +135,9 @@ describe('DCN JS SDK wrapper', () => {
 
     await expect(sdk.conditionExists('always')).resolves.toBe(true);
     await expect(sdk.conditionExists('missing')).resolves.toBe(false);
-    expect((await sdk.conditionGet('always')).sol_src).toBe('return true;');
+    expect(await sdk.conditionGet('always')).toEqual({ name: 'always', args_count: 0, owner: ADDR, address: '0x0' });
     const condition = await sdk.conditionPost({ name: 'gate', sol_src: 'return true;' });
-    expect(condition).toEqual({ name: 'gate', owner: ADDR, address: '0x0' });
+    expect(condition).toEqual({ name: 'gate', owner: ADDR, address: '0x0', args_count: 0 });
     expect(condition).not.toHaveProperty('sol_src');
     expect(JSON.parse(globalThis.__lastRequests.at(-1)!.init?.body as string)).toEqual({
       name: 'gate',
@@ -149,8 +149,10 @@ describe('DCN JS SDK wrapper', () => {
     const out = await sdk.execute('pitch', 8, {
       '0': { start_point: 12, transformation_shift: 3 },
     });
-    expect(out[0].path).toBe('/pitch');
-    expect(out[0].data).toEqual([1, 2, 3]);
+    expect(out.block_number).toBe(7);
+    expect(out.runner).toBe(ADDR);
+    expect(out.particles[0].path).toBe('/pitch');
+    expect(out.particles[0].data).toEqual([1, 2, 3]);
 
     const last = globalThis.__lastRequests.at(-1)!;
     expect(last.input).toBe('https://example.invalid/chain/execute');
@@ -166,6 +168,38 @@ describe('DCN JS SDK wrapper', () => {
       connector_name: 'pitch',
       particles_count: '8',
     });
+  });
+
+  it('simulates connectors with POST /simulate', async () => {
+    const out = await sdk.simulate('pitch', 4, { '1': { start_point: 0, transformation_shift: 1 } });
+    expect(out).toEqual([{ path: '/pitch', data: [4, 5] }]);
+
+    const last = globalThis.__lastRequests.at(-1)!;
+    expect(last.input).toBe('https://example.invalid/chain/simulate');
+    expect(JSON.parse(last.init?.body as string)).toEqual({
+      connector_name: 'pitch',
+      particles_count: 4,
+      dynamic_ri: { '1': { start_point: 0, transformation_shift: 1 } },
+    });
+  });
+
+  it('prepares and confirms publications', async () => {
+    const prepared = await sdk.publishPrepare('connector', 'pitch');
+    if (prepared.status !== 'prepared') throw new Error(`unexpected status ${prepared.status}`);
+    expect(prepared.transaction.chainId).toBe('0x1');
+    let last = globalThis.__lastRequests.at(-1)!;
+    expect(last.input).toBe('https://example.invalid/chain/publish/connector/prepare');
+    expect(JSON.parse(last.init?.body as string)).toEqual({ name: 'pitch' });
+
+    expect((await sdk.publishPrepare('condition', 'done')).status).toBe('published');
+
+    const pending = await sdk.publishConfirm('connector', { name: 'pitch', content_hash: HASH, tx_hash: '0x00' });
+    expect(pending.status).toBe('pending');
+
+    const mined = await sdk.publishConfirm('connector', { name: 'pitch', content_hash: HASH, tx_hash: TX });
+    expect(mined).toMatchObject({ status: 'mined', kind: 'connector', name: 'pitch', block_number: 8 });
+    last = globalThis.__lastRequests.at(-1)!;
+    expect(last.input).toBe('https://example.invalid/chain/publish/connector');
   });
 
   it('lists formats, fetches format membership, and fetches feed pages', async () => {

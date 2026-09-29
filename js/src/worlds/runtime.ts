@@ -18,6 +18,7 @@
 import type { ConditionInfoResponse } from '../generated/models/ConditionInfoResponse';
 import type { ConnectorInfoResponse } from '../generated/models/ConnectorInfoResponse';
 import type { ExecuteResponse } from '../generated/models/ExecuteResponse';
+import type { ParticlesResultItem } from '../generated/models/ParticlesResultItem';
 import type { FormatInfoResponse } from '../generated/models/FormatInfoResponse';
 import type { FormatListResponse } from '../generated/models/FormatListResponse';
 import type { FeedPage } from '../generated/models/FeedPage';
@@ -97,6 +98,12 @@ export interface WorldSdk {
         particlesCount: number | string,
         dynamicRi?: Record<string, RunningInstance>
     ): Promise<ExecuteResponse>;
+    /** Run a connector in the server's local simulation EVM (requires `dcn.execute`). */
+    simulate(
+        connectorName: string,
+        particlesCount: number | string,
+        dynamicRi?: Record<string, RunningInstance>
+    ): Promise<ParticlesResultItem[]>;
     /** Detach listeners and reject any in-flight calls. */
     dispose(): void;
 }
@@ -297,6 +304,17 @@ export function createWorldSdk(options: WorldSdkOptions): WorldSdk {
             dynamicRi?: Record<string, RunningInstance>
         ) {
             return rpc('execute', {
+                connectorName,
+                particlesCount,
+                ...(dynamicRi ? { dynamicRi } : {}),
+            });
+        },
+        simulate(
+            connectorName: string,
+            particlesCount: number | string,
+            dynamicRi?: Record<string, RunningInstance>
+        ) {
+            return rpc('simulate', {
                 connectorName,
                 particlesCount,
                 ...(dynamicRi ? { dynamicRi } : {}),

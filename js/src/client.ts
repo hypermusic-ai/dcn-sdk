@@ -9,7 +9,10 @@ import type { AccountInfoResponse as GeneratedAccountInfoResponse } from './gene
 import type { AccountListResponse as GeneratedAccountListResponse } from './generated/models/AccountListResponse';
 import type { Address as GeneratedAddress } from './generated/models/Address';
 import type { AuthResponse as GeneratedAuthResponse } from './generated/models/AuthResponse';
+import type { AlreadyPublished as GeneratedAlreadyPublished } from './generated/models/AlreadyPublished';
 import type { ConditionInfoResponse as GeneratedConditionInfoResponse } from './generated/models/ConditionInfoResponse';
+import type { ConfirmRequest as GeneratedConfirmRequest } from './generated/models/ConfirmRequest';
+import type { ConfirmResponse as GeneratedConfirmResponse } from './generated/models/ConfirmResponse';
 import type { ConnectorDimension as GeneratedConnectorDimension } from './generated/models/ConnectorDimension';
 import type { ConnectorInfoResponse as GeneratedConnectorInfoResponse } from './generated/models/ConnectorInfoResponse';
 import type { CreateConditionRequest as GeneratedCreateConditionRequest } from './generated/models/CreateConditionRequest';
@@ -18,6 +21,7 @@ import type { CreateConnectorRequest as GeneratedCreateConnectorRequest } from '
 import type { CreateConnectorResponse as GeneratedCreateConnectorResponse } from './generated/models/CreateConnectorResponse';
 import type { CreateTransformationRequest as GeneratedCreateTransformationRequest } from './generated/models/CreateTransformationRequest';
 import type { CreateTransformationResponse as GeneratedCreateTransformationResponse } from './generated/models/CreateTransformationResponse';
+import type { EntityKind as GeneratedEntityKind } from './generated/models/EntityKind';
 import type { ExecuteRequest as GeneratedExecuteRequest } from './generated/models/ExecuteRequest';
 import type { ExecuteResponse as GeneratedExecuteResponse } from './generated/models/ExecuteResponse';
 import type { FeedEventStatus as GeneratedFeedEventStatus } from './generated/models/FeedEventStatus';
@@ -29,9 +33,13 @@ import type { FormatInfoResponse as GeneratedFormatInfoResponse } from './genera
 import type { FormatListResponse as GeneratedFormatListResponse } from './generated/models/FormatListResponse';
 import type { NonceResponse as GeneratedNonceResponse } from './generated/models/NonceResponse';
 import type { ParticlesResultItem as GeneratedParticlesResultItem } from './generated/models/ParticlesResultItem';
+import type { PreparedPublication as GeneratedPreparedPublication } from './generated/models/PreparedPublication';
+import type { PrepareResponse as GeneratedPrepareResponse } from './generated/models/PrepareResponse';
+import type { PublishError as GeneratedPublishError } from './generated/models/PublishError';
 import type { RunningInstance as GeneratedRunningInstance } from './generated/models/RunningInstance';
 import type { TransformationCallDef as GeneratedTransformationCallDef } from './generated/models/TransformationCallDef';
 import type { TransformationInfoResponse as GeneratedTransformationInfoResponse } from './generated/models/TransformationInfoResponse';
+import type { UnsignedTransaction as GeneratedUnsignedTransaction } from './generated/models/UnsignedTransaction';
 import type { VersionResponse as GeneratedVersionResponse } from './generated/models/VersionResponse';
 
 export type Address = GeneratedAddress;
@@ -58,6 +66,15 @@ export type ConditionInfoResponse = GeneratedConditionInfoResponse;
 export type ExecuteRequest = GeneratedExecuteRequest;
 export type ParticlesResultItem = GeneratedParticlesResultItem;
 export type ExecuteResponse = GeneratedExecuteResponse;
+export type SimulateResponse = ParticlesResultItem[];
+export type EntityKind = GeneratedEntityKind;
+export type UnsignedTransaction = GeneratedUnsignedTransaction;
+export type PreparedPublication = GeneratedPreparedPublication;
+export type AlreadyPublished = GeneratedAlreadyPublished;
+export type PrepareResponse = GeneratedPrepareResponse;
+export type ConfirmRequest = GeneratedConfirmRequest;
+export type ConfirmResponse = GeneratedConfirmResponse;
+export type PublishError = GeneratedPublishError;
 export type FormatListResponse = GeneratedFormatListResponse;
 export type FormatInfoResponse = GeneratedFormatInfoResponse;
 export type FeedItem = GeneratedFeedItem;
@@ -66,7 +83,7 @@ export type FeedPage = GeneratedFeedPage;
 export interface DcnClientOptions {
     /** Chain API base URL. Defaults to `DCN_API_BASE` or `https://api.decentralised.art/chain`. */
     baseUrl?: string;
-    /** Bearer access token used for protected publish/execute endpoints. */
+    /** Bearer access token used for protected create/publish/execute endpoints. */
     accessToken?: string | null;
     /** Fetch implementation to use. Useful for tests, custom runtimes, or instrumentation. */
     fetch?: typeof fetch;
@@ -194,7 +211,9 @@ function needsAuth(options: ApiRequestOptions): boolean {
         options.url === '/connector' ||
         options.url === '/condition' ||
         options.url === '/transformation' ||
-        options.url === '/execute'
+        options.url === '/execute' ||
+        options.url === '/simulate' ||
+        options.url.startsWith('/publish/')
     );
 }
 
@@ -381,8 +400,9 @@ export class DcnClient {
     }
 
     /**
-     * Publish a connector definition.
+     * Create a connector locally for simulation.
      *
+     * The name must not be reserved on chain. Publish it on chain with `publishPrepare`/`publishConfirm`.
      * Requires bearer authentication.
      */
     async connectorPost(req: CreateConnectorRequest): Promise<CreateConnectorResponse> {
@@ -401,15 +421,16 @@ export class DcnClient {
     /**
      * Get transformation by name.
      *
-     * Returns transformation source metadata, owner, and deployed address.
+     * Returns name, argument count, owner, and address (`"0x0"` until published).
      */
     async transformationGet(name: string): Promise<TransformationInfoResponse> {
         return this._api.transformation.getTransformation(name);
     }
 
     /**
-     * Publish a transformation definition.
+     * Create a transformation locally for simulation.
      *
+     * The name must not be reserved on chain. Publish it on chain with `publishPrepare`/`publishConfirm`.
      * Requires bearer authentication.
      */
     async transformationPost(req: CreateTransformationRequest): Promise<CreateTransformationResponse> {
@@ -428,15 +449,16 @@ export class DcnClient {
     /**
      * Get condition by name.
      *
-     * Returns condition source metadata, owner, and deployed address.
+     * Returns name, argument count, owner, and address (`"0x0"` until published).
      */
     async conditionGet(name: string): Promise<ConditionInfoResponse> {
         return this._api.condition.getCondition(name);
     }
 
     /**
-     * Publish a condition definition.
+     * Create a condition locally for simulation.
      *
+     * The name must not be reserved on chain. Publish it on chain with `publishPrepare`/`publishConfirm`.
      * Requires bearer authentication.
      */
     async conditionPost(req: CreateConditionRequest): Promise<CreateConditionResponse> {
@@ -444,9 +466,10 @@ export class DcnClient {
     }
 
     /**
-     * Execute a connector.
+     * Execute a connector on chain.
      *
-     * `particlesCount` accepts protobuf JSON uint32 values and rejects values greater than 65536.
+     * Result is pinned to `block_number`/`block_hash` on `runner`, so anyone can re-check it.
+     * `particlesCount` accepts protobuf JSON uint32 values between 1 and 65536.
      * Requires bearer authentication.
      */
     async execute(
@@ -459,6 +482,45 @@ export class DcnClient {
             particles_count: particlesCount,
             ...(dynamicRi ? { dynamic_ri: dynamicRi } : {}),
         });
+    }
+
+    /**
+     * Execute a connector in the server's local simulation EVM.
+     *
+     * Covers entities created on this server before they are published on chain.
+     * Requires bearer authentication.
+     */
+    async simulate(
+        connectorName: string,
+        particlesCount: number | string,
+        dynamicRi?: Record<string, RunningInstance>
+    ): Promise<SimulateResponse> {
+        return this._api.runner.postSimulate({
+            connector_name: connectorName,
+            particles_count: particlesCount,
+            ...(dynamicRi ? { dynamic_ri: dynamicRi } : {}),
+        });
+    }
+
+    /**
+     * Prepare on-chain publication of an entity created on this server.
+     *
+     * Returns `status: 'prepared'` with an unsigned `transaction` for the owner's wallet to send
+     * (`eth_sendTransaction`), or `status: 'published'` when the registry already holds it.
+     * Requires bearer authentication.
+     */
+    async publishPrepare(kind: EntityKind, name: string): Promise<PrepareResponse> {
+        return this._api.publish.postPublishPrepare(kind, { name });
+    }
+
+    /**
+     * Confirm a publication transaction sent by the owner's wallet.
+     *
+     * Looks the receipt up once: `status: 'mined'` on success, repeat while it is `'pending'` (HTTP 202).
+     * Requires bearer authentication.
+     */
+    async publishConfirm(kind: EntityKind, req: ConfirmRequest): Promise<ConfirmResponse | PublishError> {
+        return this._api.publish.postPublishConfirm(kind, req);
     }
 
     /**

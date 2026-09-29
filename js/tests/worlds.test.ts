@@ -60,19 +60,21 @@ function fakeClient(overrides: Partial<Record<keyof DcnClient, unknown>> = {}): 
             dimensions: [],
             condition_name: '',
             condition_args: [],
+            static_ri: {},
             owner: ADDR,
             address: '0x0',
             format_hash: FORMAT,
         })),
         connectorExists: vi.fn(async () => true),
         transformationExists: vi.fn(async () => true),
-        transformationGet: vi.fn(async (name: string) => ({ name, sol_src: 'return x;', owner: ADDR, address: '0x0' })),
+        transformationGet: vi.fn(async (name: string) => ({ name, args_count: 1, owner: ADDR, address: '0x0' })),
         conditionExists: vi.fn(async () => true),
-        conditionGet: vi.fn(async (name: string) => ({ name, sol_src: 'return true;', owner: ADDR, address: '0x0' })),
+        conditionGet: vi.fn(async (name: string) => ({ name, args_count: 0, owner: ADDR, address: '0x0' })),
         formatInfo: vi.fn(async () => ({ connectors: ['pitch'] })),
         listFormats: vi.fn(async () => ({ formats: [FORMAT] })),
         feed: vi.fn(async () => ({ items: [] })),
-        execute: vi.fn(async () => [{ path: '/pitch', data: [1, 2, 3] }]),
+        execute: vi.fn(async () => ({ block_number: 7, block_hash: '0xb', runner: ADDR, particles: [{ path: '/pitch', data: [1, 2, 3] }] })),
+        simulate: vi.fn(async () => [{ path: '/pitch', data: [4, 5] }]),
     };
     const client = { ...spies, ...overrides } as unknown as DcnClient;
     return { client, spies };
@@ -115,10 +117,13 @@ describe('world runtime <-> host broker', () => {
         expect(spies.connectorGet).toHaveBeenCalledWith('pitch');
 
         const out = await sdk.execute('pitch', 8, { '0': { start_point: 1, transformation_shift: 0 } });
-        expect(out[0].data).toEqual([1, 2, 3]);
+        expect(out.particles[0].data).toEqual([1, 2, 3]);
         expect(spies.execute).toHaveBeenCalledWith('pitch', 8, {
             '0': { start_point: 1, transformation_shift: 0 },
         });
+
+        await expect(sdk.simulate('pitch', '4')).resolves.toEqual([{ path: '/pitch', data: [4, 5] }]);
+        expect(spies.simulate).toHaveBeenCalledWith('pitch', '4', undefined);
     });
 
     it('round-trips transformation and condition existence checks through the host', async () => {
@@ -146,6 +151,7 @@ describe('world runtime <-> host broker', () => {
                 dimensions: [],
                 condition_name: '',
                 condition_args: [],
+                static_ri: {},
                 owner: ADDR,
                 address: '0x0',
                 format_hash: FORMAT,
@@ -180,12 +186,14 @@ describe('world runtime <-> host broker', () => {
         expect(spies.connectorGet).not.toHaveBeenCalled();
     });
 
-    it('gates execute behind dcn.execute', async () => {
+    it('gates execute and simulate behind dcn.execute', async () => {
         connected = connect(['dcn.connectors.read']); // read but not execute
         const { sdk, spies } = connected;
 
         await expect(sdk.execute('pitch', 4)).rejects.toMatchObject({ code: 'permission_denied' });
+        await expect(sdk.simulate('pitch', 4)).rejects.toMatchObject({ code: 'permission_denied' });
         expect(spies.execute).not.toHaveBeenCalled();
+        expect(spies.simulate).not.toHaveBeenCalled();
     });
 
     it('gates transformation and condition reads independently', async () => {
@@ -549,7 +557,7 @@ describe('world runtime <-> host broker', () => {
         sdk.dispose();
     });
 
-    it('rejects execute counts above the broker limit before calling the chain client', async () => {
+    it('rejects execute counts outside the broker limit before calling the chain client', async () => {
         connected = connect(['dcn.execute']);
         const { sdk, spies } = connected;
 
@@ -559,6 +567,13 @@ describe('world runtime <-> host broker', () => {
         await expect(sdk.execute('pitch', '0001')).rejects.toMatchObject({
             code: 'bad_request',
         });
+        await expect(sdk.execute('pitch', 0)).rejects.toMatchObject({
+            code: 'bad_request',
+        });
+        await expect(sdk.simulate('pitch', 65537)).rejects.toMatchObject({
+            code: 'bad_request',
+        });
+        expect(spies.simulate).not.toHaveBeenCalled();
         expect(spies.execute).not.toHaveBeenCalled();
     });
 
@@ -583,7 +598,7 @@ describe('world runtime <-> host broker', () => {
         sdk.ready();
         await expect(sdk.execute('pitch', 3)).rejects.toMatchObject({ code: 'bad_request' });
         await expect(sdk.execute('pitch', 9)).rejects.toMatchObject({ code: 'bad_request' });
-        await expect(sdk.execute('pitch', 6)).resolves.toEqual([{ path: '/pitch', data: [1, 2, 3] }]);
+        await expect(sdk.execute('pitch', 6)).resolves.toMatchObject({ particles: [{ path: '/pitch', data: [1, 2, 3] }] });
         expect(spies.execute).toHaveBeenCalledTimes(1);
         host.dispose();
         sdk.dispose();

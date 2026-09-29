@@ -10,6 +10,7 @@
 import type { ConditionInfoResponse } from '../generated/models/ConditionInfoResponse';
 import type { ConnectorInfoResponse } from '../generated/models/ConnectorInfoResponse';
 import type { ExecuteResponse } from '../generated/models/ExecuteResponse';
+import type { ParticlesResultItem } from '../generated/models/ParticlesResultItem';
 import type { FeedEventType } from '../generated/models/FeedEventType';
 import type { FeedPage } from '../generated/models/FeedPage';
 import type { FormatInfoResponse } from '../generated/models/FormatInfoResponse';
@@ -104,7 +105,8 @@ export type WorldRpcMethod =
     | 'formatInfo'
     | 'listFormats'
     | 'feed'
-    | 'execute';
+    | 'execute'
+    | 'simulate';
 
 /** Cursor page params for list-style brokered calls. */
 export interface WorldPageParams {
@@ -120,7 +122,7 @@ export interface WorldFeedParams {
     includeUnfinalized?: boolean;
 }
 
-/** Execute params for the brokered execute call. */
+/** Params for the brokered execute and simulate calls. */
 export interface WorldExecuteParams {
     connectorName: string;
     particlesCount: number | string;
@@ -142,6 +144,7 @@ export interface WorldRpcMap {
     listFormats: { params: WorldPageParams; result: FormatListResponse };
     feed: { params: WorldFeedParams; result: FeedPage };
     execute: { params: WorldExecuteParams; result: ExecuteResponse };
+    simulate: { params: WorldExecuteParams; result: ParticlesResultItem[] };
 }
 
 export type WorldRpcParams<M extends WorldRpcMethod> = WorldRpcMap[M]['params'];
@@ -159,6 +162,7 @@ export const WORLD_RPC_PERMISSION: Record<WorldRpcMethod, WorldPermission> = {
     listFormats: 'dcn.connectors.read',
     feed: 'dcn.social.read',
     execute: 'dcn.execute',
+    simulate: 'dcn.execute',
 };
 
 // ---------------------------------------------------------------------------
