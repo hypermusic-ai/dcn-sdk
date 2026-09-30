@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // JS (Node-only) sibling of python/scripts/bundle-openapi.py.
 //
-// Merges every services/*/openapi.yaml under a dcn-api-spec checkout into one
+// Merges every apis/chain/*/openapi.yaml under a api-spec checkout into one
 // OpenAPI 3.0.3 document: collects tags, concatenates paths, and hoists
 // $ref'd schemas/securitySchemes into components. Output is JSON, ready for
 // openapi-typescript-codegen. This exists so the SDK chain client can be
@@ -59,12 +59,12 @@ class SpecBundler {
     }
 
     bundle({ title, version, dropOptions }) {
-        const serviceSpecs = this.serviceSpecs();
-        if (serviceSpecs.length === 0) {
-            throw new Error(`No service specs found under ${path.join(this.specRoot, 'services')}`);
+        const chainSpecs = this.chainSpecs();
+        if (chainSpecs.length === 0) {
+            throw new Error(`No chain API specs found under ${path.join(this.specRoot, 'apis', 'chain')}`);
         }
 
-        const first = this.load(serviceSpecs[0]);
+        const first = this.load(chainSpecs[0]);
         const bundled = {
             openapi: '3.0.3',
             info: { title, version },
@@ -76,7 +76,7 @@ class SpecBundler {
         };
 
         const seenTags = new Set();
-        for (const specPath of serviceSpecs) {
+        for (const specPath of chainSpecs) {
             const doc = this.load(specPath);
             for (const tag of doc.tags ?? []) {
                 const name = tag?.name;
@@ -97,7 +97,7 @@ class SpecBundler {
                     );
                 }
                 if (!Object.keys(resolved).some((key) => HTTP_METHODS.has(key.toLowerCase()))) continue;
-                if (p in bundled.paths) throw new Error(`Duplicate path in service specs: ${p}`);
+                if (p in bundled.paths) throw new Error(`Duplicate path in chain API specs: ${p}`);
                 bundled.paths[p] = resolved;
             }
         }
@@ -111,8 +111,8 @@ class SpecBundler {
         return bundled;
     }
 
-    serviceSpecs() {
-        const dir = path.join(this.specRoot, 'services');
+    chainSpecs() {
+        const dir = path.join(this.specRoot, 'apis', 'chain');
         if (!fs.existsSync(dir)) return [];
         return fs
             .readdirSync(dir, { withFileTypes: true })
@@ -214,7 +214,7 @@ class SpecBundler {
 }
 
 function parseArgs(argv) {
-    const args = { title: 'DCN Chain API', version: '0.4.0', keepOptions: false };
+    const args = { title: 'decentralised.art Chain API', version: '0.4.0', keepOptions: false };
     for (let i = 0; i < argv.length; i += 1) {
         const arg = argv[i];
         switch (arg) {
@@ -244,10 +244,10 @@ function parseArgs(argv) {
 
 function main() {
     const args = parseArgs(process.argv.slice(2));
-    const servicesDir = path.join(path.resolve(args.specRoot), 'services');
-    if (!fs.existsSync(servicesDir)) {
+    const chainDir = path.join(path.resolve(args.specRoot), 'apis', 'chain');
+    if (!fs.existsSync(chainDir)) {
         throw new Error(
-            `Missing dcn-api-spec services at ${args.specRoot}. ` +
+            `Missing api-spec chain API at ${chainDir}. ` +
                 'Run: git submodule update --init --recursive'
         );
     }

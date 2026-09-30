@@ -9,12 +9,12 @@ import httpx
 from eth_account import Account
 from eth_account.messages import encode_defunct
 
-from dcn.client import Client
-from dcn.crypto import sign_login_nonce
+from decentralised_art.client import Client
+from decentralised_art.crypto import sign_login_nonce
 from fixtures import ADDR, ApiRouter
 
 
-class TestDcnAuth(unittest.TestCase):
+class TestDecentralisedArtAuth(unittest.TestCase):
     def setUp(self) -> None:
         self.router = ApiRouter()
         self.client = Client(
@@ -39,7 +39,10 @@ class TestDcnAuth(unittest.TestCase):
 
     def test_login_with_account_sets_access_token(self) -> None:
         account = SimpleNamespace(address=ADDR)
-        with patch("dcn.client.sign_login_nonce", return_value=("Login nonce: abcd-efgh", "0xSIG")):
+        with patch(
+            "decentralised_art.client.sign_login_nonce",
+            return_value=("Login nonce: abcd-efgh", "0xSIG"),
+        ):
             out = self.client.login_with_account(account)
         self.assertEqual(out.access_token, "access-123")
         self.assertEqual(self.client.access_token, "access-123")

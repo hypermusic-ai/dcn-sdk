@@ -21,12 +21,12 @@ except Exception:
     sys.modules["eth_account"] = eth_account
     sys.modules["eth_account.messages"] = eth_account_messages
 
-from dcn import cli
+from decentralised_art import cli
 
 
 class TestCli(unittest.TestCase):
     def test_version_command_prints_json_and_passes_base_url(self) -> None:
-        with patch("dcn.cli.Client") as client_cls:
+        with patch("decentralised_art.cli.Client") as client_cls:
             client = client_cls.return_value
             client.version.return_value = {
                 "version": "0.4.0",
@@ -37,7 +37,10 @@ class TestCli(unittest.TestCase):
             with patch.object(
                 sys,
                 "argv",
-                ["dcn-auth", "--base-url", "https://example.invalid/chain", "version"],
+                [
+                    "decentralised-art-auth", "--base-url",
+                    "https://example.invalid/chain", "version",
+                ],
             ), patch("sys.stdout", stdout):
                 cli.main()
 
@@ -49,7 +52,7 @@ class TestCli(unittest.TestCase):
         )
 
     def test_nonce_command_prints_json_for_address(self) -> None:
-        with patch("dcn.cli.Client") as client_cls:
+        with patch("decentralised_art.cli.Client") as client_cls:
             client = client_cls.return_value
             client.get_nonce.return_value = {"nonce": "abcd-efgh"}
 
@@ -57,7 +60,7 @@ class TestCli(unittest.TestCase):
             with patch.object(
                 sys,
                 "argv",
-                ["dcn-auth", "nonce", "0x1111111111111111111111111111111111111111"],
+                ["decentralised-art-auth", "nonce", "0x1111111111111111111111111111111111111111"],
             ), patch("sys.stdout", stdout):
                 cli.main()
 

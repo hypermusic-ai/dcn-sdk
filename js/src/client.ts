@@ -1,6 +1,6 @@
 declare const process: { env?: Record<string, string | undefined> } | undefined;
 
-import { DcnGeneratedClient } from './generated/DcnGeneratedClient';
+import { DecentralisedArtGeneratedClient } from './generated/DecentralisedArtGeneratedClient';
 import type { ApiRequestOptions } from './generated/core/ApiRequestOptions';
 import { BaseHttpRequest } from './generated/core/BaseHttpRequest';
 import { CancelablePromise } from './generated/core/CancelablePromise';
@@ -149,8 +149,8 @@ export type FormatInfoResponse = GeneratedFormatInfoResponse;
 export type FeedItem = GeneratedFeedItem;
 export type FeedPage = GeneratedFeedPage;
 
-export interface DcnClientOptions {
-    /** Chain API base URL. Defaults to `DCN_API_BASE` or `https://api.decentralised.art/chain`. */
+export interface DecentralisedArtClientOptions {
+    /** Chain API base URL. Defaults to `DECENTRALISED_ART_API_BASE` or `https://api.decentralised.art/chain`. */
     baseUrl?: string;
     /** Bearer access token used for protected create/publish endpoints. */
     accessToken?: string | null;
@@ -190,14 +190,14 @@ export interface PageOptions {
     after?: string;
 }
 
-/** Error raised for non-2xx DCN API responses. */
-export class DcnApiError extends Error {
+/** Error raised for non-2xx decentralised.art API responses. */
+export class DecentralisedArtApiError extends Error {
     readonly status: number;
     readonly body: unknown;
 
     constructor(status: number, body: unknown) {
-        super(`DCN API request failed with status ${String(status)}`);
-        this.name = 'DcnApiError';
+        super(`decentralised.art API request failed with status ${String(status)}`);
+        this.name = 'DecentralisedArtApiError';
         this.status = status;
         this.body = body;
     }
@@ -284,7 +284,7 @@ function needsAuth(options: ApiRequestOptions): boolean {
     );
 }
 
-class DcnHttpRequest extends BaseHttpRequest {
+class DecentralisedArtHttpRequest extends BaseHttpRequest {
     constructor(
         config: OpenAPIConfig,
         private readonly fetcher: typeof fetch
@@ -315,7 +315,7 @@ class DcnHttpRequest extends BaseHttpRequest {
                     });
                     const body = await parseBody(response);
                     if (!response.ok) {
-                        reject(new DcnApiError(response.status, body));
+                        reject(new DecentralisedArtApiError(response.status, body));
                         return;
                     }
                     resolve(body as T);
@@ -327,32 +327,32 @@ class DcnHttpRequest extends BaseHttpRequest {
     }
 }
 
-export class DcnClient {
+export class DecentralisedArtClient {
     private _accessToken?: string | null;
     private _signer: OfflineSigner | null = null;
     private readonly _baseUrl: string;
     private readonly _fetch: typeof fetch;
-    private readonly _api: DcnGeneratedClient;
+    private readonly _api: DecentralisedArtGeneratedClient;
 
     /**
-     * Create a DCN Chain API client.
+     * Create a decentralised.art Chain API client.
      *
-     * Defaults to `https://api.decentralised.art/chain`; override with `baseUrl` or `DCN_API_BASE`.
+     * Defaults to `https://api.decentralised.art/chain`; override with `baseUrl` or `DECENTRALISED_ART_API_BASE`.
      */
-    constructor(opts: DcnClientOptions = {}) {
-        const envBase = typeof process !== 'undefined' ? process.env?.DCN_API_BASE : undefined;
+    constructor(opts: DecentralisedArtClientOptions = {}) {
+        const envBase = typeof process !== 'undefined' ? process.env?.DECENTRALISED_ART_API_BASE : undefined;
         this._baseUrl = stripSlashes(opts.baseUrl ?? envBase ?? DEFAULT_BASE);
         this._accessToken = opts.accessToken ?? null;
         this._fetch = opts.fetch ?? globalThis.fetch.bind(globalThis);
 
         const fetcher = this._fetch;
-        const HttpRequest = class extends DcnHttpRequest {
+        const HttpRequest = class extends DecentralisedArtHttpRequest {
             constructor(config: OpenAPIConfig) {
                 super(config, fetcher);
             }
         };
 
-        this._api = new DcnGeneratedClient({
+        this._api = new DecentralisedArtGeneratedClient({
             BASE: this._baseUrl,
             TOKEN: (options) => Promise.resolve(needsAuth(options) ? this._accessToken ?? '' : ''),
             ENCODE_PATH: encodeURIComponent,
@@ -373,7 +373,7 @@ export class DcnClient {
             await check;
             return true;
         } catch (error) {
-            if (error instanceof DcnApiError && error.status === 404) return false;
+            if (error instanceof DecentralisedArtApiError && error.status === 404) return false;
             throw error;
         }
     }
@@ -381,7 +381,7 @@ export class DcnClient {
     /**
      * Get chain API version metadata.
      *
-     * Returns service version and build timestamp.
+     * Returns chain API version and build timestamp.
      */
     async version(): Promise<VersionResponse> {
         return this._api.core.getVersion();
@@ -712,7 +712,7 @@ export class DcnClient {
             since_seq: opts.sinceSeq,
             limit: opts.limit,
         }), { method: 'GET' });
-        if (!resp.ok) throw new DcnApiError(resp.status, await parseBody(resp));
+        if (!resp.ok) throw new DecentralisedArtApiError(resp.status, await parseBody(resp));
         return resp;
     }
 

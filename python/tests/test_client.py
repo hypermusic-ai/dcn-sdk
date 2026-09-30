@@ -6,11 +6,11 @@ from unittest.mock import patch
 
 import httpx
 
-from dcn.client import (
+from decentralised_art.client import (
     AlreadyPublished,
     Client,
     ConfirmResponse,
-    DcnApiError,
+    DecentralisedArtApiError,
     PreparedPublication,
     PublishError,
 )
@@ -20,7 +20,7 @@ from eth_account import Account
 from fixtures import ADDR, FORMAT, HASH, SIGNING, TX, ApiRouter
 
 
-class TestDcnClient(unittest.TestCase):
+class TestDecentralisedArtClient(unittest.TestCase):
     def setUp(self) -> None:
         self.router = ApiRouter()
         self.client = Client(
@@ -39,7 +39,7 @@ class TestDcnClient(unittest.TestCase):
 
     def test_env_base_url_and_context_manager(self) -> None:
         router = ApiRouter()
-        with patch.dict("os.environ", {"DCN_API_BASE": "https://env.invalid/chain/"}):
+        with patch.dict("os.environ", {"DECENTRALISED_ART_API_BASE": "https://env.invalid/chain/"}):
             with Client(transport=httpx.MockTransport(router)) as client:
                 out = client.version()
                 self.assertEqual(out.version, "0.4.0")
@@ -323,18 +323,18 @@ class TestDcnClient(unittest.TestCase):
         self.assertEqual(query, {"since_seq": "10", "limit": "20"})
 
     def test_api_error_includes_status_and_body(self) -> None:
-        with self.assertRaises(DcnApiError) as raised:
+        with self.assertRaises(DecentralisedArtApiError) as raised:
             self.client.connector_get("missing")
         self.assertEqual(raised.exception.status_code, 404)
         self.assertEqual(raised.exception.body["error"], "not_found")
 
     def test_text_error_body_and_head_error(self) -> None:
-        with self.assertRaises(DcnApiError) as raised:
+        with self.assertRaises(DecentralisedArtApiError) as raised:
             self.client.connector_get("plain-error")
         self.assertEqual(raised.exception.status_code, 500)
         self.assertEqual(raised.exception.body, "plain failure")
 
-        with self.assertRaises(DcnApiError) as head_raised:
+        with self.assertRaises(DecentralisedArtApiError) as head_raised:
             self.client.connector_exists("broken")
         self.assertEqual(head_raised.exception.status_code, 503)
         self.assertEqual(head_raised.exception.body, "temporarily down")

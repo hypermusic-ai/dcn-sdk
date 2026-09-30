@@ -2,28 +2,28 @@
  * Host-side world broker.
  *
  * The host (a world page or studio plugin surface) owns an authenticated
- * `DcnClient` and mounts worlds in sandboxed iframes. This broker listens for
+ * `DecentralisedArtClient` and mounts worlds in sandboxed iframes. This broker listens for
  * brokered RPC requests from a world, enforces the world's manifest
- * permissions, forwards the call to the chain via `DcnClient`, and replies.
+ * permissions, forwards the call to the chain via `DecentralisedArtClient`, and replies.
  * It can also push state (render data and/or cache seed) to the world.
  *
  * Usage (host side):
  *
- *   import { DcnClient } from 'dcn';
- *   import { createWorldHost } from 'dcn/worlds/host';
+ *   import { DecentralisedArtClient } from 'decentralised-art';
+ *   import { createWorldHost } from 'decentralised-art/worlds/host';
  *   const host = createWorldHost({
- *     client: new DcnClient({ accessToken }),
+ *     client: new DecentralisedArtClient({ accessToken }),
  *     worldId: descriptor.slug,
  *     permissions: descriptor.permissions,
  *     iframe: previewIframe,
  *   });
  *   host.pushState({ payload: { label: 'Hello' }, seed: { connectors } });
  */
-import { DcnApiError } from '../client';
-import type { DcnClient } from '../client';
+import { DecentralisedArtApiError } from '../client';
+import type { DecentralisedArtClient } from '../client';
 // Re-exported so a single-entry bundle of this module gives hosts both the
 // broker and the chain client they pass to it (used by the served host build).
-export { DcnClient } from '../client';
+export { DecentralisedArtClient } from '../client';
 import {
     WORLD_CHANNEL_TOKEN_PARAM,
     WORLD_MESSAGE_TYPES,
@@ -45,7 +45,7 @@ import type { ConnectorInfoResponse } from '../generated/models/ConnectorInfoRes
 
 export interface WorldHostOptions {
     /** Authenticated chain client used to service brokered calls. */
-    client: DcnClient;
+    client: DecentralisedArtClient;
     /**
      * World identity. When provided, only messages tagged with this id are
      * accepted. When omitted, the broker adopts the id from the world's first
@@ -101,14 +101,14 @@ function toRpcError(error: unknown, logger: Pick<Console, 'warn'>): WorldRpcErro
             message: error.message,
         };
     }
-    if (error instanceof DcnApiError) {
+    if (error instanceof DecentralisedArtApiError) {
         return {
             code: 'host_error',
             message: `Chain request failed with status ${String(error.status)}`,
             status: error.status,
         };
     }
-    logger.warn('DCN world host RPC failed unexpectedly', error);
+    logger.warn('decentralised.art world host RPC failed unexpectedly', error);
     return {
         code: 'host_error',
         message: 'Unexpected host error',
@@ -288,7 +288,7 @@ function validateRpcParams(
 }
 
 async function dispatch(
-    client: DcnClient,
+    client: DecentralisedArtClient,
     method: WorldRpcMethod,
     params: Record<string, unknown>
 ): Promise<unknown> {
@@ -430,7 +430,7 @@ export function createWorldHost(options: WorldHostOptions): WorldHost {
         // "null". A specific postMessage targetOrigin cannot match that opaque
         // origin, so after source+token validation we must reply with "*".
         if (configuredTargetOrigin === undefined && event.origin === 'null' && targetOrigin !== '*') {
-            logger.warn('DCN world host detected a null-origin sandbox; using wildcard postMessage targetOrigin');
+            logger.warn('decentralised.art world host detected a null-origin sandbox; using wildcard postMessage targetOrigin');
             targetOrigin = '*';
         }
         const source = (event.source as Window | null) ?? null;

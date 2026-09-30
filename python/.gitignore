@@ -70,8 +70,8 @@ secrets.*.json
 *.log
 logs/
 
-# --- DCN API client ---
-dcn_api_client/
+# --- decentralised.art API client ---
+decentralised_art_api_client/
 
 # --- Version ---
-dcn/_version.py
+decentralised_art/_version.py

@@ -67,7 +67,7 @@ jobs:
           npm run prepack
           mkdir -p ../build/npm
           npm pack --pack-destination ../build/npm
-          cp ../build/npm/dcn-*.tgz ../build/npm/dcn-js-sdk.tgz
+          cp ../build/npm/decentralised-art-*.tgz ../build/npm/decentralised-art-js-sdk.tgz
         working-directory: js
 
       - name: Upload JavaScript package
@@ -105,14 +105,14 @@ jobs:
           python scripts/codegen.py
           python -m pyright
           python -m mypy
-          flake8 dcn scripts tests
+          flake8 decentralised_art scripts tests
           python -m unittest discover -s tests -p 'test_*.py' -v
         working-directory: python
 
       - name: Build Python distribution
         run: |
           python -m build --sdist --wheel
-          cp dist/dcn-*.tar.gz dist/dcn-python-sdk.tar.gz
+          cp dist/decentralised_art-*.tar.gz dist/decentralised-art-python-sdk.tar.gz
           ls -l dist
         working-directory: python
 

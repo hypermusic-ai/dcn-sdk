@@ -22,22 +22,22 @@ import type { TransformationInfoResponse } from '../generated/models/Transformat
 export const WORLD_PROTOCOL_VERSION = 1 as const;
 
 /** URL parameter used to pass the per-mount channel token into a world iframe. */
-export const WORLD_CHANNEL_TOKEN_PARAM = 'dcnWorldChannel';
+export const WORLD_CHANNEL_TOKEN_PARAM = 'worldChannel';
 
 /** Message `type` discriminators exchanged between world and host. */
 export const WORLD_MESSAGE_TYPES = {
     /** world -> host: the world has loaded and is ready to receive state. */
-    ready: 'dcn:world-ready',
+    ready: 'decentralised.art:world-ready',
     /** host -> world: render state and/or seed data for the world. */
-    state: 'dcn:world-state',
+    state: 'decentralised.art:world-state',
     /** world -> host: the world finished rendering a given state request. */
-    rendered: 'dcn:world-rendered',
+    rendered: 'decentralised.art:world-rendered',
     /** world -> host: the world hit an unrecoverable error. */
-    error: 'dcn:world-error',
-    /** world -> host: invoke a brokered DCN data/execute call. */
-    rpcRequest: 'dcn:world-rpc-request',
+    error: 'decentralised.art:world-error',
+    /** world -> host: invoke a brokered decentralised.art data/execute call. */
+    rpcRequest: 'decentralised.art:world-rpc-request',
     /** host -> world: result for a previous rpc request. */
-    rpcResponse: 'dcn:world-rpc-response',
+    rpcResponse: 'decentralised.art:world-rpc-response',
 } as const;
 
 export type WorldMessageType = (typeof WORLD_MESSAGE_TYPES)[keyof typeof WORLD_MESSAGE_TYPES];
@@ -51,15 +51,15 @@ export type WorldRuntimeSurface = 'world-page' | 'studio-plugin';
 
 /**
  * Permissions a world may declare. Mirrors `ALLOWED_PERMISSIONS` in the backend
- * (`src/world_bundle.rs`). The broker uses the `dcn.*` entries to gate brokered
+ * (`src/world_bundle.rs`). The broker uses the `decentralised.art.*` entries to gate brokered
  * calls.
  */
 export type WorldPermission =
-    | 'dcn.connectors.read'
-    | 'dcn.transformations.read'
-    | 'dcn.conditions.read'
-    | 'dcn.social.read'
-    | 'dcn.execute'
+    | 'decentralised.art.connectors.read'
+    | 'decentralised.art.transformations.read'
+    | 'decentralised.art.conditions.read'
+    | 'decentralised.art.social.read'
+    | 'decentralised.art.execute'
     | 'browser.audio'
     | 'browser.downloads';
 
@@ -92,7 +92,7 @@ export interface WorldManifest {
 }
 
 // ---------------------------------------------------------------------------
-// RPC method surface (mirrors the brokered subset of DcnClient)
+// RPC method surface (mirrors the brokered subset of DecentralisedArtClient)
 // ---------------------------------------------------------------------------
 
 export type WorldRpcMethod =
@@ -152,17 +152,17 @@ export type WorldRpcResult<M extends WorldRpcMethod> = WorldRpcMap[M]['result'];
 
 /** Permission required to invoke a given RPC method. */
 export const WORLD_RPC_PERMISSION: Record<WorldRpcMethod, WorldPermission> = {
-    connectorGet: 'dcn.connectors.read',
-    connectorExists: 'dcn.connectors.read',
-    transformationExists: 'dcn.transformations.read',
-    transformationGet: 'dcn.transformations.read',
-    conditionExists: 'dcn.conditions.read',
-    conditionGet: 'dcn.conditions.read',
-    formatInfo: 'dcn.connectors.read',
-    listFormats: 'dcn.connectors.read',
-    feed: 'dcn.social.read',
-    execute: 'dcn.execute',
-    simulate: 'dcn.execute',
+    connectorGet: 'decentralised.art.connectors.read',
+    connectorExists: 'decentralised.art.connectors.read',
+    transformationExists: 'decentralised.art.transformations.read',
+    transformationGet: 'decentralised.art.transformations.read',
+    conditionExists: 'decentralised.art.conditions.read',
+    conditionGet: 'decentralised.art.conditions.read',
+    formatInfo: 'decentralised.art.connectors.read',
+    listFormats: 'decentralised.art.connectors.read',
+    feed: 'decentralised.art.social.read',
+    execute: 'decentralised.art.execute',
+    simulate: 'decentralised.art.execute',
 };
 
 // ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ export interface WorldRpcRequestMessage<M extends WorldRpcMethod = WorldRpcMetho
 export interface WorldRpcError {
     code: 'permission_denied' | 'unknown_method' | 'bad_request' | 'host_error' | 'timeout';
     message: string;
-    /** Underlying chain API status, when the failure came from a DcnApiError. */
+    /** Underlying chain API status, when the failure came from a DecentralisedArtApiError. */
     status?: number;
 }
 

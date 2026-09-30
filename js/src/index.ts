@@ -1,2 +1,2 @@
 export * from './generated';
-export { DcnClient } from './client';
+export { DecentralisedArtClient } from './client';

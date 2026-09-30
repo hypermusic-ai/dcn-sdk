@@ -5,13 +5,13 @@
 Install a pinned GitHub Release with npm:
 
 ```bash
-npm install "https://github.com/hypermusic-ai/dcn-sdk/releases/download/v0.1.0/dcn-js-sdk.tgz"
+npm install "https://github.com/decentralised-art/sdk/releases/download/v0.1.0/decentralised-art-js-sdk.tgz"
 ```
 
 Install the latest GitHub Release:
 
 ```bash
-npm install "https://github.com/hypermusic-ai/dcn-sdk/releases/latest/download/dcn-js-sdk.tgz"
+npm install "https://github.com/decentralised-art/sdk/releases/latest/download/decentralised-art-js-sdk.tgz"
 ```
 
 Prefer the pinned URL in production so installs are reproducible.
@@ -37,10 +37,10 @@ npm test
 ## Quick Start
 
 ```typescript
-import { DcnClient } from 'dcn';
+import { DecentralisedArtClient } from 'decentralised-art';
 import { Wallet } from 'ethers';
 
-const sdk = new DcnClient(); // https://api.decentralised.art/chain
+const sdk = new DecentralisedArtClient(); // https://api.decentralised.art/chain
 
 const version = await sdk.version();
 console.log(version.version, version.build_timestamp);
@@ -66,7 +66,7 @@ console.log(await sdk.simulate('pitch', 8));
 ```
 
 The SDK defaults to the chain API base URL, `https://api.decentralised.art/chain`.
-Set `DCN_API_BASE` or pass `new DcnClient({ baseUrl })` to target another chain API.
+Set `DECENTRALISED_ART_API_BASE` or pass `new DecentralisedArtClient({ baseUrl })` to target another chain API.
 
 ### Publishing on chain
 

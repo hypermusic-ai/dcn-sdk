@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Bundle DCN service OpenAPI specs into one SDK OpenAPI document.
+"""Bundle decentralised.art chain API specs into one SDK OpenAPI document.
 
 This is the Python sibling of ``js/scripts/bundle-openapi.mjs``. It lives in
 the SDK repository so SDK builds do not depend on executable tooling from the
-``dcn-api-spec`` submodule; the submodule provides only the OpenAPI source
+``api-spec`` submodule; the submodule provides only the OpenAPI source
 documents.
 """
 
@@ -99,11 +99,12 @@ class SpecBundler:
         self.security_components: dict[str, object] = {}
 
     def bundle(self, *, title: str, version: str, drop_options: bool) -> JsonMap:
-        service_specs = self.service_specs()
-        if not service_specs:
-            raise RuntimeError(f"No service specs found under {self.spec_root / 'services'}")
+        chain_specs = self.chain_specs()
+        if not chain_specs:
+            chain_dir = self.spec_root / "apis" / "chain"
+            raise RuntimeError(f"No chain API specs found under {chain_dir}")
 
-        first = self.load(service_specs[0])
+        first = self.load(chain_specs[0])
         bundled_tags: list[object] = []
         bundled_paths: JsonMap = {}
         components: JsonMap = {"securitySchemes": {}, "schemas": {}}
@@ -118,7 +119,7 @@ class SpecBundler:
         }
 
         seen_tags: set[str] = set()
-        for spec_path in service_specs:
+        for spec_path in chain_specs:
             doc = self.load(spec_path)
             tags = as_list(doc.get("tags", []))
             for tag in tags:
@@ -145,7 +146,7 @@ class SpecBundler:
                 if not any(key.lower() in HTTP_METHODS for key in resolved_path_item):
                     continue
                 if path in bundled_paths:
-                    raise RuntimeError(f"Duplicate path in service specs: {path}")
+                    raise RuntimeError(f"Duplicate path in chain API specs: {path}")
                 bundled_paths[path] = resolved_path_item
 
         components["securitySchemes"] = dict(sorted(self.security_components.items()))
@@ -159,11 +160,11 @@ class SpecBundler:
 
         return bundled
 
-    def service_specs(self) -> list[Path]:
-        services_dir = self.spec_root / "services"
-        if not services_dir.exists():
+    def chain_specs(self) -> list[Path]:
+        chain_dir = self.spec_root / "apis" / "chain"
+        if not chain_dir.exists():
             return []
-        return sorted(path for path in services_dir.glob("*/openapi.yaml") if path.is_file())
+        return sorted(path for path in chain_dir.glob("*/openapi.yaml") if path.is_file())
 
     def load(self, path: Path) -> JsonMap:
         resolved = path.resolve()
@@ -281,11 +282,11 @@ def infer_format(output: Path) -> str:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Bundle DCN OpenAPI service specs for SDK codegen."
+        description="Bundle decentralised.art chain API specs for SDK codegen."
     )
     parser.add_argument("--spec-root", required=True)
     parser.add_argument("--output", required=True)
-    parser.add_argument("--title", default="DCN Chain API")
+    parser.add_argument("--title", default="decentralised.art Chain API")
     parser.add_argument("--version", default="0.4.0")
     parser.add_argument("--keep-options", action="store_true")
     parser.add_argument(
@@ -300,10 +301,10 @@ def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
     spec_root = Path(args.spec_root)
-    if not (spec_root / "services").is_dir():
+    if not (spec_root / "apis" / "chain").is_dir():
         raise RuntimeError(
-            f"Missing dcn-api-spec services at {spec_root}. "
-            "Run: git submodule update --init --recursive submodules/dcn-api-spec"
+            f"Missing api-spec chain API at {spec_root / 'apis' / 'chain'}. "
+            "Run: git submodule update --init --recursive submodules/api-spec"
         )
     output = Path(args.output)
     bundled = SpecBundler(spec_root).bundle(

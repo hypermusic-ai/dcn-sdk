@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 const jsDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const repoRoot = resolve(jsDir, '..');
-const specRoot = resolve(repoRoot, 'submodules', 'dcn-api-spec');
+const specRoot = resolve(repoRoot, 'submodules', 'api-spec');
 const jsBundler = resolve(jsDir, 'scripts', 'bundle-openapi.mjs');
 const pythonBundler = resolve(repoRoot, 'python', 'scripts', 'bundle-openapi.py');
 
@@ -24,7 +24,7 @@ const maybeIt = python === undefined ? it.skip : it;
 
 describe('OpenAPI bundler generation parity', () => {
     maybeIt('keeps the JS and Python SDK bundlers in lockstep', () => {
-        const dir = mkdtempSync(join(tmpdir(), 'dcn-openapi-parity-'));
+        const dir = mkdtempSync(join(tmpdir(), 'decentralised-art-openapi-parity-'));
         const jsOut = join(dir, 'js.json');
         const pyOut = join(dir, 'py.json');
         try {

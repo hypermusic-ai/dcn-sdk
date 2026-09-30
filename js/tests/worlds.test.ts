@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { DcnApiError } from '../src/client';
-import type { DcnClient } from '../src/client';
+import { DecentralisedArtApiError } from '../src/client';
+import type { DecentralisedArtClient } from '../src/client';
 import { createWorldSdk, WorldRpcCallError } from '../src/worlds/runtime';
 import { createWorldHost } from '../src/worlds/host';
 import type { WorldPermission } from '../src/worlds/protocol';
@@ -50,8 +50,8 @@ function makePair(): { worldWin: FakeWindow; hostWin: FakeWindow } {
     return { worldWin, hostWin };
 }
 
-function fakeClient(overrides: Partial<Record<keyof DcnClient, unknown>> = {}): {
-    client: DcnClient;
+function fakeClient(overrides: Partial<Record<keyof DecentralisedArtClient, unknown>> = {}): {
+    client: DecentralisedArtClient;
     spies: Record<string, ReturnType<typeof vi.fn>>;
 } {
     const spies = {
@@ -76,7 +76,7 @@ function fakeClient(overrides: Partial<Record<keyof DcnClient, unknown>> = {}): 
         execute: vi.fn(async () => ({ block_number: 7, block_hash: '0xb', runner: ADDR, particles: [{ path: '/pitch', data: [1, 2, 3] }] })),
         simulate: vi.fn(async () => [{ path: '/pitch', data: [4, 5] }]),
     };
-    const client = { ...spies, ...overrides } as unknown as DcnClient;
+    const client = { ...spies, ...overrides } as unknown as DecentralisedArtClient;
     return { client, spies };
 }
 
@@ -109,7 +109,7 @@ describe('world runtime <-> host broker', () => {
     });
 
     it('round-trips brokered read and execute calls through the host', async () => {
-        connected = connect(['dcn.connectors.read', 'dcn.execute']);
+        connected = connect(['decentralised.art.connectors.read', 'decentralised.art.execute']);
         const { sdk, spies } = connected;
 
         const connector = await sdk.connectorGet('pitch');
@@ -127,7 +127,7 @@ describe('world runtime <-> host broker', () => {
     });
 
     it('round-trips transformation and condition existence checks through the host', async () => {
-        connected = connect(['dcn.transformations.read', 'dcn.conditions.read']);
+        connected = connect(['decentralised.art.transformations.read', 'decentralised.art.conditions.read']);
         const { sdk, spies } = connected;
 
         await expect(sdk.transformationExists('transpose')).resolves.toBe(true);
@@ -142,7 +142,7 @@ describe('world runtime <-> host broker', () => {
     });
 
     it('serves connectorGet from the seeded cache without an RPC round-trip', async () => {
-        connected = connect(['dcn.connectors.read']);
+        connected = connect(['decentralised.art.connectors.read']);
         const { sdk, host, spies } = connected;
 
         host.pushConnectors({
@@ -166,7 +166,7 @@ describe('world runtime <-> host broker', () => {
     });
 
     it('delivers host state pushes to onState subscribers', async () => {
-        connected = connect(['dcn.connectors.read']);
+        connected = connect(['decentralised.art.connectors.read']);
         const { sdk, host } = connected;
         const seen: unknown[] = [];
         sdk.onState<{ label: string }>((state) => seen.push(state.payload));
@@ -186,8 +186,8 @@ describe('world runtime <-> host broker', () => {
         expect(spies.connectorGet).not.toHaveBeenCalled();
     });
 
-    it('gates execute and simulate behind dcn.execute', async () => {
-        connected = connect(['dcn.connectors.read']); // read but not execute
+    it('gates execute and simulate behind decentralised.art.execute', async () => {
+        connected = connect(['decentralised.art.connectors.read']); // read but not execute
         const { sdk, spies } = connected;
 
         await expect(sdk.execute('pitch', 4)).rejects.toMatchObject({ code: 'permission_denied' });
@@ -197,7 +197,7 @@ describe('world runtime <-> host broker', () => {
     });
 
     it('gates transformation and condition reads independently', async () => {
-        connected = connect(['dcn.transformations.read']);
+        connected = connect(['decentralised.art.transformations.read']);
         const { sdk, spies } = connected;
 
         await expect(sdk.transformationGet('transpose')).resolves.toMatchObject({ name: 'transpose' });
@@ -209,7 +209,7 @@ describe('world runtime <-> host broker', () => {
     });
 
     it('gates feed behind social read permission', async () => {
-        connected = connect(['dcn.connectors.read']);
+        connected = connect(['decentralised.art.connectors.read']);
         const { sdk, spies } = connected;
 
         await expect(sdk.listFormats()).resolves.toMatchObject({ formats: [FORMAT] });
@@ -219,7 +219,7 @@ describe('world runtime <-> host broker', () => {
 
         connected.host.dispose();
         connected.sdk.dispose();
-        connected = connect(['dcn.social.read']);
+        connected = connect(['decentralised.art.social.read']);
         await expect(connected.sdk.feed()).resolves.toMatchObject({ items: [] });
         expect(connected.spies.feed).toHaveBeenCalled();
     });
@@ -227,10 +227,10 @@ describe('world runtime <-> host broker', () => {
     it('propagates chain API errors as host_error with the status', async () => {
         const factory = fakeClient({
             connectorGet: vi.fn(async () => {
-                throw new DcnApiError(404, { error: 'not_found' });
+                throw new DecentralisedArtApiError(404, { error: 'not_found' });
             }),
         });
-        connected = connect(['dcn.connectors.read'], factory);
+        connected = connect(['decentralised.art.connectors.read'], factory);
         const { sdk } = connected;
 
         const error = await sdk.connectorGet('missing').catch((e: unknown) => e);
@@ -257,7 +257,7 @@ describe('world runtime <-> host broker', () => {
         const host = createWorldHost({
             client,
             // no worldId configured
-            permissions: ['dcn.connectors.read'],
+            permissions: ['decentralised.art.connectors.read'],
             iframe: { contentWindow: worldWin as unknown as Window },
             listenWindow: hostWin as unknown as Window,
         });
@@ -388,7 +388,7 @@ describe('world runtime <-> host broker', () => {
         sdk.ready();
 
         expect(host.worldId).toBe('simple-counter');
-        expect(new URL(tokenizedUrl).searchParams.get('dcnWorldChannel')).toBe(host.channelToken);
+        expect(new URL(tokenizedUrl).searchParams.get('worldChannel')).toBe(host.channelToken);
         host.dispose();
         sdk.dispose();
     });
@@ -408,7 +408,7 @@ describe('world runtime <-> host broker', () => {
 
         worldWin.peer = attackerWin;
         worldWin.postMessage({
-            type: 'dcn:world-state',
+            type: 'decentralised.art:world-state',
             worldId: WORLD_ID,
             channelToken: 'source-token',
             payload: { label: 'spoofed' },
@@ -425,19 +425,19 @@ describe('world runtime <-> host broker', () => {
         const host = createWorldHost({
             client,
             worldId: WORLD_ID,
-            permissions: ['dcn.connectors.read'],
+            permissions: ['decentralised.art.connectors.read'],
             iframe: { contentWindow: worldWin as unknown as Window },
             listenWindow: hostWin as unknown as Window,
         });
 
         hostWin.postMessage({
-            type: 'dcn:world-ready',
+            type: 'decentralised.art:world-ready',
             worldId: WORLD_ID,
             channelToken: host.channelToken,
             protocolVersion: 1,
         });
         hostWin.postMessage({
-            type: 'dcn:world-rpc-request',
+            type: 'decentralised.art:world-rpc-request',
             worldId: WORLD_ID,
             channelToken: 'wrong-token',
             requestId: 'wrong-token-1',
@@ -461,11 +461,11 @@ describe('world runtime <-> host broker', () => {
             accessToken: secret,
             password: 'host-password-123',
             privateKey,
-        } as Partial<Record<keyof DcnClient, unknown>>);
+        } as Partial<Record<keyof DecentralisedArtClient, unknown>>);
         const host = createWorldHost({
             client: factory.client,
             worldId: WORLD_ID,
-            permissions: ['dcn.connectors.read'],
+            permissions: ['decentralised.art.connectors.read'],
             iframe: { contentWindow: worldWin as unknown as Window },
             listenWindow: hostWin as unknown as Window,
         });
@@ -497,19 +497,19 @@ describe('world runtime <-> host broker', () => {
         const host = createWorldHost({
             client,
             worldId: WORLD_ID,
-            permissions: ['dcn.execute'],
+            permissions: ['decentralised.art.execute'],
             iframe: { contentWindow: worldWin as unknown as Window },
             listenWindow: hostWin as unknown as Window,
         });
         hostWin.postMessage({
-            type: 'dcn:world-ready',
+            type: 'decentralised.art:world-ready',
             worldId: WORLD_ID,
             channelToken: host.channelToken,
             protocolVersion: 1,
         });
 
         hostWin.postMessage({
-            type: 'dcn:world-rpc-request',
+            type: 'decentralised.art:world-rpc-request',
             worldId: WORLD_ID,
             channelToken: host.channelToken,
             requestId: 'bad-1',
@@ -532,7 +532,7 @@ describe('world runtime <-> host broker', () => {
         const host = createWorldHost({
             client: factory.client,
             worldId: WORLD_ID,
-            permissions: ['dcn.connectors.read'],
+            permissions: ['decentralised.art.connectors.read'],
             iframe: { contentWindow: worldWin as unknown as Window },
             listenWindow: hostWin as unknown as Window,
             logger,
@@ -550,7 +550,7 @@ describe('world runtime <-> host broker', () => {
             message: 'Unexpected host error',
         });
         expect(logger.warn).toHaveBeenCalledWith(
-            'DCN world host RPC failed unexpectedly',
+            'decentralised.art world host RPC failed unexpectedly',
             expect.any(Error)
         );
         host.dispose();
@@ -558,7 +558,7 @@ describe('world runtime <-> host broker', () => {
     });
 
     it('rejects execute counts outside the broker limit before calling the chain client', async () => {
-        connected = connect(['dcn.execute']);
+        connected = connect(['decentralised.art.execute']);
         const { sdk, spies } = connected;
 
         await expect(sdk.execute('pitch', 65537)).rejects.toMatchObject({
@@ -583,7 +583,7 @@ describe('world runtime <-> host broker', () => {
         const host = createWorldHost({
             client,
             worldId: WORLD_ID,
-            permissions: ['dcn.execute'],
+            permissions: ['decentralised.art.execute'],
             valueLimits: { particlesCount: { min: 4, max: 8 } },
             iframe: { contentWindow: worldWin as unknown as Window },
             listenWindow: hostWin as unknown as Window,
@@ -605,7 +605,7 @@ describe('world runtime <-> host broker', () => {
     });
 
     it('rejects non-canonical or oversized dynamicRi indexes before execution', async () => {
-        connected = connect(['dcn.execute']);
+        connected = connect(['decentralised.art.execute']);
         const { sdk, spies } = connected;
 
         await expect(

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DcnClient } from '../src/client';
-import type { DcnApiError } from '../src/client';
+import { DecentralisedArtClient } from '../src/client';
+import type { DecentralisedArtApiError } from '../src/client';
 import { ADDR, FORMAT, HASH, TX, json } from './fixtures';
 
 const SIGNING = {
@@ -48,7 +48,7 @@ function relayServer(minedAfter: number) {
       content_hash: HASH,
     }, 201);
   });
-  const client = new DcnClient({ baseUrl: 'https://example.invalid/chain', accessToken: 'token', fetch });
+  const client = new DecentralisedArtClient({ baseUrl: 'https://example.invalid/chain', accessToken: 'token', fetch });
   return { client, calls };
 }
 
@@ -61,11 +61,11 @@ function ethersWallet() {
   };
 }
 
-describe('DCN JS SDK wrapper', () => {
-  let sdk: DcnClient;
+describe('decentralised.art JS SDK wrapper', () => {
+  let sdk: DecentralisedArtClient;
 
   beforeEach(() => {
-    sdk = new DcnClient({ baseUrl: 'https://example.invalid/chain' });
+    sdk = new DecentralisedArtClient({ baseUrl: 'https://example.invalid/chain' });
   });
 
   it('uses the chain base URL for version', async () => {
@@ -76,11 +76,11 @@ describe('DCN JS SDK wrapper', () => {
     expect(last.input).toBe('https://example.invalid/chain/version');
   });
 
-  it('uses DCN_API_BASE and strips trailing slashes', async () => {
-    const previousBase = process.env.DCN_API_BASE;
-    process.env.DCN_API_BASE = 'https://env.invalid/chain/';
+  it('uses DECENTRALISED_ART_API_BASE and strips trailing slashes', async () => {
+    const previousBase = process.env.DECENTRALISED_ART_API_BASE;
+    process.env.DECENTRALISED_ART_API_BASE = 'https://env.invalid/chain/';
     try {
-      const envSdk = new DcnClient();
+      const envSdk = new DecentralisedArtClient();
       const v = await envSdk.version();
       expect(v.version).toBe('0.4.0');
 
@@ -88,9 +88,9 @@ describe('DCN JS SDK wrapper', () => {
       expect(last.input).toBe('https://env.invalid/chain/version');
     } finally {
       if (previousBase === undefined) {
-        delete process.env.DCN_API_BASE;
+        delete process.env.DECENTRALISED_ART_API_BASE;
       } else {
-        process.env.DCN_API_BASE = previousBase;
+        process.env.DECENTRALISED_ART_API_BASE = previousBase;
       }
     }
   });
@@ -106,7 +106,7 @@ describe('DCN JS SDK wrapper', () => {
       }
       return json({ error: 'not_found' }, 404);
     });
-    const customSdk = new DcnClient({
+    const customSdk = new DecentralisedArtClient({
       baseUrl: 'https://custom.invalid/chain///',
       accessToken: 'token-123',
       fetch: fetchMock,
@@ -433,24 +433,24 @@ describe('DCN JS SDK wrapper', () => {
       }
       return json({ error: 'bad_request' }, 400);
     });
-    const errorSdk = new DcnClient({
+    const errorSdk = new DecentralisedArtClient({
       baseUrl: 'https://example.invalid/chain',
       fetch: fetchMock,
     });
 
-    await expect(errorSdk.connectorGet('missing')).rejects.toMatchObject<DcnApiError>({
+    await expect(errorSdk.connectorGet('missing')).rejects.toMatchObject<DecentralisedArtApiError>({
       status: 400,
       body: { error: 'bad_request' },
     });
-    await expect(errorSdk.execute('pitch', 8)).rejects.toMatchObject<DcnApiError>({
+    await expect(errorSdk.execute('pitch', 8)).rejects.toMatchObject<DecentralisedArtApiError>({
       status: 500,
       body: 'plain failure',
     });
-    await expect(errorSdk.connectorExists('pitch')).rejects.toMatchObject<DcnApiError>({
+    await expect(errorSdk.connectorExists('pitch')).rejects.toMatchObject<DecentralisedArtApiError>({
       status: 503,
       body: 'temporarily down',
     });
-    await expect(errorSdk.feedStream()).rejects.toMatchObject<DcnApiError>({
+    await expect(errorSdk.feedStream()).rejects.toMatchObject<DecentralisedArtApiError>({
       status: 502,
       body: { error: 'stream_failed' },
     });

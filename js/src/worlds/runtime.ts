@@ -2,14 +2,14 @@
  * World-side runtime SDK.
  *
  * This is the interface every world must use to talk to the host. It runs
- * inside the sandboxed iframe and deliberately has no `DcnClient` dependency:
+ * inside the sandboxed iframe and deliberately has no `DecentralisedArtClient` dependency:
  * the world never holds a token and never reaches the chain directly. Every
  * data/execute call is brokered to the host over postMessage, and the host
  * enforces the world's manifest permissions.
  *
  * Usage (inside a world's entry script):
  *
- *   import { createWorldSdk } from 'dcn/worlds/runtime';
+ *   import { createWorldSdk } from 'decentralised-art/worlds/runtime';
  *   const sdk = createWorldSdk({ worldId: 'world.my-thing' });
  *   sdk.onState((state) => render(state.payload));
  *   sdk.ready();
@@ -55,7 +55,7 @@ export interface WorldSdkOptions {
      * Recommended in production; defaults to accepting any origin.
      */
     expectedOrigin?: string;
-    /** Per-mount capability token. Defaults to the URL dcnWorldChannel parameter. */
+    /** Per-mount capability token. Defaults to the URL worldChannel parameter. */
     channelToken?: string;
     /** Per-call RPC timeout in milliseconds. Defaults to 15000. */
     requestTimeoutMs?: number;
@@ -98,7 +98,7 @@ export interface WorldSdk {
         particlesCount: number | string,
         dynamicRi?: Record<string, RunningInstance>
     ): Promise<ExecuteResponse>;
-    /** Run a connector in the server's local simulation EVM (requires `dcn.execute`). */
+    /** Run a connector in the server's local simulation EVM (requires `decentralised.art.execute`). */
     simulate(
         connectorName: string,
         particlesCount: number | string,
@@ -371,6 +371,6 @@ function inferChannelToken(listenWindow: Window): string | undefined {
 }
 
 function requireChannelToken(value: string | undefined): string {
-    if (!value) throw new Error('createWorldSdk requires a channelToken or dcnWorldChannel URL parameter');
+    if (!value) throw new Error('createWorldSdk requires a channelToken or worldChannel URL parameter');
     return value;
 }

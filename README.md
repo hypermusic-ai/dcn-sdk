@@ -1,12 +1,12 @@
-# Decentralized Creative Network SDKs
+# decentralised.art SDKs
 
 SDKs for the chain API : `https://api.decentralised.art/chain`
 
 ---
 
-[![Release](https://github.com/hypermusic-ai/dcn-sdk/actions/workflows/release.yml/badge.svg)](https://github.com/hypermusic-ai/dcn-sdk/actions/workflows/release.yml)
+[![Release](https://github.com/decentralised-art/sdk/actions/workflows/release.yml/badge.svg)](https://github.com/decentralised-art/sdk/actions/workflows/release.yml)
 
-- [Decentralized Creative Network SDKs](#decentralized-creative-network-sdks)
+- [decentralised.art SDKs](#decentralisedart-sdks)
   - [Install (Python SDK)](#install-python-sdk)
   - [Install (JavaScript SDK)](#install-javascript-sdk)
   - [Release Process](#release-process)
@@ -15,7 +15,7 @@ SDKs for the chain API : `https://api.decentralised.art/chain`
 
 ## Install (Python SDK)
 
-Package name: `dcn`
+Package name: `decentralised-art`
 Requires Python `3.9+`
 
 [Learn more about Python SDK](python/README.md)
@@ -23,37 +23,37 @@ Requires Python `3.9+`
 Install from the latest source on `main`:
 
 ```bash
-pip install "git+https://github.com/hypermusic-ai/dcn-sdk.git@main#subdirectory=python"
+pip install "git+https://github.com/decentralised-art/sdk.git@main#subdirectory=python"
 ```
 
 Install a pinned release:
 
 ```bash
-pip install "dcn @ https://github.com/hypermusic-ai/dcn-sdk/releases/download/v0.1.0/dcn-python-sdk.tar.gz"
+pip install "decentralised-art @ https://github.com/decentralised-art/sdk/releases/download/v0.1.0/decentralised-art-python-sdk.tar.gz"
 ```
 
 Install the latest GitHub Release:
 
 ```bash
-pip install "dcn @ https://github.com/hypermusic-ai/dcn-sdk/releases/latest/download/dcn-python-sdk.tar.gz"
+pip install "decentralised-art @ https://github.com/decentralised-art/sdk/releases/latest/download/decentralised-art-python-sdk.tar.gz"
 ```
 
 ## Install (JavaScript SDK)
 
-Package name: `dcn`
+Package name: `decentralised-art`
 
 [Learn more about JavaScript SDK](js/README.md)
 
 Install a pinned release with npm:
 
 ```bash
-npm install "https://github.com/hypermusic-ai/dcn-sdk/releases/download/v0.1.0/dcn-js-sdk.tgz"
+npm install "https://github.com/decentralised-art/sdk/releases/download/v0.1.0/decentralised-art-js-sdk.tgz"
 ```
 
 Install the latest GitHub Release:
 
 ```bash
-npm install "https://github.com/hypermusic-ai/dcn-sdk/releases/latest/download/dcn-js-sdk.tgz"
+npm install "https://github.com/decentralised-art/sdk/releases/latest/download/decentralised-art-js-sdk.tgz"
 ```
 
 Prefer the pinned URL in production so installs are reproducible.
@@ -76,5 +76,5 @@ GitHub Actions builds, checks, and attaches release assets when the tag is pushe
 
 The release includes:
 
-- `dcn-js-sdk.tgz` and the versioned npm tarball for JavaScript/TypeScript projects.
-- `dcn-python-sdk.tar.gz` plus the versioned Python wheel and source distribution files.
+- `decentralised-art-js-sdk.tgz` and the versioned npm tarball for JavaScript/TypeScript projects.
+- `decentralised-art-python-sdk.tar.gz` plus the versioned Python wheel and source distribution files.
