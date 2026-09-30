@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { DcnClient } from '../src/client';
-import { DcnClient as PublicDcnClient } from '../src';
+import { DecentralisedArtClient } from '../src/client';
+import { DecentralisedArtClient as PublicDecentralisedArtClient } from '../src';
 
-describe('DCN JS package entrypoint', () => {
+describe('decentralised.art JS package entrypoint', () => {
   it('exports the public client facade', () => {
-    expect(PublicDcnClient).toBe(DcnClient);
+    expect(PublicDecentralisedArtClient).toBe(DecentralisedArtClient);
   });
 });

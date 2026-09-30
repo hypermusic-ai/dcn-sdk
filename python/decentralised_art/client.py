@@ -12,83 +12,87 @@ from eth_account.signers.local import LocalAccount
 from eth_typing import HexStr
 
 from .crypto import sign_login_nonce
-from .dcn_api_client.api.account import get_account, get_accounts
-from .dcn_api_client.api.auth import get_nonce, post_auth
-from .dcn_api_client.api.condition import (
+from .decentralised_art_api_client.api.account import get_account, get_accounts
+from .decentralised_art_api_client.api.auth import get_nonce, post_auth
+from .decentralised_art_api_client.api.condition import (
     get_condition,
     head_condition,
     post_condition,
 )
-from .dcn_api_client.api.connector import (
+from .decentralised_art_api_client.api.connector import (
     get_connector,
     head_connector,
     post_connector,
 )
-from .dcn_api_client.api.core import get_version
-from .dcn_api_client.api.feed import get_feed
-from .dcn_api_client.api.format_ import get_format, get_formats
-from .dcn_api_client.api.publish import (
+from .decentralised_art_api_client.api.core import get_version
+from .decentralised_art_api_client.api.feed import get_feed
+from .decentralised_art_api_client.api.format_ import get_format, get_formats
+from .decentralised_art_api_client.api.publish import (
     post_publish_confirm,
     post_publish_prepare,
     post_publish_send,
 )
-from .dcn_api_client.api.runner import post_execute, post_simulate
-from .dcn_api_client.api.transformation import (
+from .decentralised_art_api_client.api.runner import post_execute, post_simulate
+from .decentralised_art_api_client.api.transformation import (
     get_transformation,
     head_transformation,
     post_transformation,
 )
-from .dcn_api_client.client import AuthenticatedClient, Client as GeneratedClient
-from .dcn_api_client.models.account_info_response import AccountInfoResponse
-from .dcn_api_client.models.account_list_response import AccountListResponse
-from .dcn_api_client.models.already_published import AlreadyPublished
-from .dcn_api_client.models.auth_request import AuthRequest
-from .dcn_api_client.models.auth_response import AuthResponse
-from .dcn_api_client.models.condition_info_response import ConditionInfoResponse
-from .dcn_api_client.models.confirm_request import ConfirmRequest
-from .dcn_api_client.models.confirm_response import ConfirmResponse
-from .dcn_api_client.models.connector_info_response import ConnectorInfoResponse
-from .dcn_api_client.models.create_condition_request import CreateConditionRequest
-from .dcn_api_client.models.create_condition_response import CreateConditionResponse
-from .dcn_api_client.models.create_connector_request import CreateConnectorRequest
-from .dcn_api_client.models.create_connector_response import CreateConnectorResponse
-from .dcn_api_client.models.create_transformation_request import (
+from .decentralised_art_api_client.client import AuthenticatedClient, Client as GeneratedClient
+from .decentralised_art_api_client.models.account_info_response import AccountInfoResponse
+from .decentralised_art_api_client.models.account_list_response import AccountListResponse
+from .decentralised_art_api_client.models.already_published import AlreadyPublished
+from .decentralised_art_api_client.models.auth_request import AuthRequest
+from .decentralised_art_api_client.models.auth_response import AuthResponse
+from .decentralised_art_api_client.models.condition_info_response import ConditionInfoResponse
+from .decentralised_art_api_client.models.confirm_request import ConfirmRequest
+from .decentralised_art_api_client.models.confirm_response import ConfirmResponse
+from .decentralised_art_api_client.models.connector_info_response import ConnectorInfoResponse
+from .decentralised_art_api_client.models.create_condition_request import CreateConditionRequest
+from .decentralised_art_api_client.models.create_condition_response import CreateConditionResponse
+from .decentralised_art_api_client.models.create_connector_request import CreateConnectorRequest
+from .decentralised_art_api_client.models.create_connector_response import CreateConnectorResponse
+from .decentralised_art_api_client.models.create_transformation_request import (
     CreateTransformationRequest,
 )
-from .dcn_api_client.models.create_transformation_response import (
+from .decentralised_art_api_client.models.create_transformation_response import (
     CreateTransformationResponse,
 )
-from .dcn_api_client.models.entity_kind import EntityKind
-from .dcn_api_client.models.execute_request import ExecuteRequest
-from .dcn_api_client.models.execute_request_dynamic_ri import ExecuteRequestDynamicRi
-from .dcn_api_client.models.execute_response import ExecuteResponse
-from .dcn_api_client.models.feed_event_type import FeedEventType
-from .dcn_api_client.models.feed_page import FeedPage
-from .dcn_api_client.models.format_info_response import FormatInfoResponse
-from .dcn_api_client.models.format_list_response import FormatListResponse
-from .dcn_api_client.models.get_feed_include_unfinalized import GETFeedIncludeUnfinalized
-from .dcn_api_client.models.nonce_response import NonceResponse
-from .dcn_api_client.models.particles_result_item import ParticlesResultItem
-from .dcn_api_client.models.prepare_request import PrepareRequest
-from .dcn_api_client.models.prepared_publication import PreparedPublication
-from .dcn_api_client.models.publish_error import PublishError
-from .dcn_api_client.models.send_request import SendRequest
-from .dcn_api_client.models.send_response import SendResponse
-from .dcn_api_client.models.running_instance import RunningInstance
-from .dcn_api_client.models.transformation_info_response import TransformationInfoResponse
-from .dcn_api_client.models.version_response import VersionResponse
-from .dcn_api_client.types import Response, UNSET, Unset
+from .decentralised_art_api_client.models.entity_kind import EntityKind
+from .decentralised_art_api_client.models.execute_request import ExecuteRequest
+from .decentralised_art_api_client.models.execute_request_dynamic_ri import ExecuteRequestDynamicRi
+from .decentralised_art_api_client.models.execute_response import ExecuteResponse
+from .decentralised_art_api_client.models.feed_event_type import FeedEventType
+from .decentralised_art_api_client.models.feed_page import FeedPage
+from .decentralised_art_api_client.models.format_info_response import FormatInfoResponse
+from .decentralised_art_api_client.models.format_list_response import FormatListResponse
+from .decentralised_art_api_client.models.get_feed_include_unfinalized import (
+    GETFeedIncludeUnfinalized,
+)
+from .decentralised_art_api_client.models.nonce_response import NonceResponse
+from .decentralised_art_api_client.models.particles_result_item import ParticlesResultItem
+from .decentralised_art_api_client.models.prepare_request import PrepareRequest
+from .decentralised_art_api_client.models.prepared_publication import PreparedPublication
+from .decentralised_art_api_client.models.publish_error import PublishError
+from .decentralised_art_api_client.models.send_request import SendRequest
+from .decentralised_art_api_client.models.send_response import SendResponse
+from .decentralised_art_api_client.models.running_instance import RunningInstance
+from .decentralised_art_api_client.models.transformation_info_response import (
+    TransformationInfoResponse,
+)
+from .decentralised_art_api_client.models.version_response import VersionResponse
+from .decentralised_art_api_client.types import Response, UNSET, Unset
 
 DEFAULT_BASE = "https://api.decentralised.art/chain"
 
 T = TypeVar("T")
 
 
-class DcnApiError(RuntimeError):
-    """Error raised for non-2xx DCN API responses."""
+class DecentralisedArtApiError(RuntimeError):
+    """Error raised for non-2xx decentralised.art API responses."""
 
     def __init__(self, status_code: int, body: object) -> None:
-        super().__init__(f"DCN API request failed with status {status_code}")
+        super().__init__(f"decentralised.art API request failed with status {status_code}")
         self.status_code = status_code
         self.body = body
 
@@ -119,8 +123,8 @@ def _expect(response: Response[object], typ: type[T]) -> T:
     if HTTPStatus.OK <= response.status_code < HTTPStatus.MULTIPLE_CHOICES:
         if isinstance(response.parsed, typ):
             return response.parsed
-        raise DcnApiError(int(response.status_code), _decode_error(response))
-    raise DcnApiError(int(response.status_code), _decode_error(response))
+        raise DecentralisedArtApiError(int(response.status_code), _decode_error(response))
+    raise DecentralisedArtApiError(int(response.status_code), _decode_error(response))
 
 
 def _expect_list(response: Response[object], item_type: type[T]) -> list[T]:
@@ -129,8 +133,8 @@ def _expect_list(response: Response[object], item_type: type[T]) -> list[T]:
         items = cast(list[object], parsed)
         if isinstance(parsed, list) and all(isinstance(item, item_type) for item in items):
             return cast(list[T], parsed)
-        raise DcnApiError(int(response.status_code), _decode_error(response))
-    raise DcnApiError(int(response.status_code), _decode_error(response))
+        raise DecentralisedArtApiError(int(response.status_code), _decode_error(response))
+    raise DecentralisedArtApiError(int(response.status_code), _decode_error(response))
 
 
 def _execute_request(
@@ -161,10 +165,10 @@ def _request_dict(request: Mapping[str, object] | T, typ: type[T]) -> T:
 
 @dataclass
 class Client:
-    """DCN Chain API facade.
+    """decentralised.art Chain API facade.
 
     Defaults to `https://api.decentralised.art/chain`; override with `base_url`
-    or `DCN_API_BASE`.
+    or `DECENTRALISED_ART_API_BASE`.
     """
 
     base_url: Optional[str] = None
@@ -185,7 +189,9 @@ class Client:
     def __post_init__(self) -> None:
         # The account of the last login_with_account; publish signs with it by default.
         self._account: Optional[LocalAccount] = None
-        base = (self.base_url or os.getenv("DCN_API_BASE") or DEFAULT_BASE).rstrip("/")
+        base = (
+            self.base_url or os.getenv("DECENTRALISED_ART_API_BASE") or DEFAULT_BASE
+        ).rstrip("/")
         timeout = httpx.Timeout(self.timeout)
         self._client = httpx.Client(
             base_url=base,
@@ -251,12 +257,12 @@ class Client:
             return False
         if HTTPStatus.OK <= response.status_code < HTTPStatus.MULTIPLE_CHOICES:
             return True
-        raise DcnApiError(int(response.status_code), _decode_error(response))
+        raise DecentralisedArtApiError(int(response.status_code), _decode_error(response))
 
     def version(self) -> VersionResponse:
         """Get chain API version metadata.
 
-        Returns service version and build timestamp.
+        Returns chain API version and build timestamp.
         """
         return _expect(
             self._call(get_version, self._generated),
@@ -517,7 +523,7 @@ class Client:
             )
         if isinstance(response.parsed, (PreparedPublication, AlreadyPublished)):
             return response.parsed
-        raise DcnApiError(int(response.status_code), _decode_error(response))
+        raise DecentralisedArtApiError(int(response.status_code), _decode_error(response))
 
     def publish_confirm(
         self,
@@ -541,7 +547,7 @@ class Client:
             )
         if isinstance(response.parsed, (ConfirmResponse, PublishError)):
             return response.parsed
-        raise DcnApiError(int(response.status_code), _decode_error(response))
+        raise DecentralisedArtApiError(int(response.status_code), _decode_error(response))
 
     def publish_send(
         self,

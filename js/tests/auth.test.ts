@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { DcnClient } from '../src/client';
+import { DecentralisedArtClient } from '../src/client';
 import { ADDR } from './fixtures';
 
-describe('DCN JS auth facade', () => {
-  let sdk: DcnClient;
+describe('decentralised.art JS auth facade', () => {
+  let sdk: DecentralisedArtClient;
 
   beforeEach(() => {
-    sdk = new DcnClient({ baseUrl: 'https://example.invalid/chain' });
+    sdk = new DecentralisedArtClient({ baseUrl: 'https://example.invalid/chain' });
   });
 
   it('authenticates with nonce and attaches bearer token afterwards', async () => {

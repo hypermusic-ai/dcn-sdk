@@ -15,11 +15,11 @@ from hatchling.builders.hooks.plugin.interface import BuildHookInterface
 
 SDK_DIR = Path(__file__).resolve().parents[1]
 REPO_ROOT = SDK_DIR.parent
-SPEC_ROOT = REPO_ROOT / "submodules" / "dcn-api-spec"
+SPEC_ROOT = REPO_ROOT / "submodules" / "api-spec"
 BUNDLE_OPENAPI = SDK_DIR / "scripts" / "bundle-openapi.py"
-SPEC_OUTPUT = REPO_ROOT / "build" / "openapi" / "dcn-sdk.openapi.yaml"
+SPEC_OUTPUT = REPO_ROOT / "build" / "openapi" / "decentralised-art-sdk.openapi.yaml"
 OUTPUT_DIR = SDK_DIR / "build"
-DEST = SDK_DIR / "dcn" / "dcn_api_client"
+DEST = SDK_DIR / "decentralised_art" / "decentralised_art_api_client"
 
 
 def run(args: list[str]) -> None:
@@ -30,7 +30,7 @@ def run(args: list[str]) -> None:
 def fail_missing_tool() -> None:
     raise SystemExit(
         f"SDK OpenAPI bundler not found: {BUNDLE_OPENAPI}\n"
-        "Run: git submodule update --init --recursive submodules/dcn-api-spec"
+        "Run: git submodule update --init --recursive submodules/api-spec"
     )
 
 
@@ -59,8 +59,8 @@ def main() -> int:
         "--overwrite",
     ]
     config = {
-        "project_name_override": "dcn_api_client",
-        "package_name_override": "dcn_api_client",
+        "project_name_override": "decentralised_art_api_client",
+        "package_name_override": "decentralised_art_api_client",
     }
     with tempfile.NamedTemporaryFile(
         "w",
@@ -75,7 +75,7 @@ def main() -> int:
     finally:
         config_path.unlink(missing_ok=True)
 
-    generated_pkg = OUTPUT_DIR / "dcn_api_client"
+    generated_pkg = OUTPUT_DIR / "decentralised_art_api_client"
     if not generated_pkg.exists():
         raise SystemExit(f"Generated package not found: {generated_pkg}")
     if DEST.exists() and not DEST.is_dir():
@@ -93,7 +93,7 @@ class CustomHook(BuildHookInterface[Any]):
         if os.getenv("NO_CODEGEN") == "1":
             self.app.display_info("Skipping OpenAPI generation (NO_CODEGEN=1)")
             return
-        self.app.display_info("Generating OpenAPI client from dcn-api-spec...")
+        self.app.display_info("Generating OpenAPI client from the API spec submodule...")
         main()
         self.app.display_info("OpenAPI client generation complete.")
 

@@ -14,7 +14,7 @@ def _jsonable(value: object) -> object:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="dcn-auth")
+    parser = argparse.ArgumentParser(prog="decentralised-art-auth")
     parser.add_argument("--base-url", default=None)
     subparsers = parser.add_subparsers(dest="command", required=True)
 

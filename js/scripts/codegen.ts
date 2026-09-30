@@ -6,8 +6,8 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const sdkDir = resolve(dirname(__filename), '..');
 const repoRoot = resolve(sdkDir, '..');
-const specRoot = resolve(repoRoot, 'submodules', 'dcn-api-spec');
-const specOutput = resolve(repoRoot, 'build', 'openapi', 'dcn-sdk.openapi.yaml');
+const specRoot = resolve(repoRoot, 'submodules', 'api-spec');
+const specOutput = resolve(repoRoot, 'build', 'openapi', 'decentralised-art-sdk.openapi.yaml');
 const outputDir = resolve(sdkDir, 'src', 'generated');
 const bundleOpenapi = resolve(sdkDir, 'scripts', 'bundle-openapi.mjs');
 // Run the generator's JS entry with node: Windows refuses to spawn the .cmd shim without a shell.
@@ -15,12 +15,12 @@ const generatorBin = resolve(sdkDir, 'node_modules', 'openapi-typescript-codegen
 
 function fail(message: string): never {
   throw new Error(
-    `${message}\nRun: git submodule update --init --recursive submodules/dcn-api-spec`
+    `${message}\nRun: git submodule update --init --recursive submodules/api-spec`
   );
 }
 
-if (!existsSync(resolve(specRoot, 'services'))) {
-  fail(`dcn-api-spec services not found: ${resolve(specRoot, 'services')}`);
+if (!existsSync(resolve(specRoot, 'apis', 'chain'))) {
+  fail(`api-spec chain API not found: ${resolve(specRoot, 'apis', 'chain')}`);
 }
 
 if (!existsSync(bundleOpenapi)) {
@@ -63,7 +63,7 @@ const result = spawnSync(
     '--postfixServices',
     'Api',
     '--name',
-    'DcnGeneratedClient',
+    'DecentralisedArtGeneratedClient',
   ],
   { cwd: repoRoot, stdio: 'inherit' }
 );

@@ -1,17 +1,17 @@
-# Python DCN SDK
+# Python decentralised.art SDK
 
 ## Install
 
 Install a pinned GitHub Release:
 
 ```bash
-pip install "dcn @ https://github.com/hypermusic-ai/dcn-sdk/releases/download/v0.1.0/dcn-python-sdk.tar.gz"
+pip install "decentralised-art @ https://github.com/decentralised-art/sdk/releases/download/v0.1.0/decentralised-art-python-sdk.tar.gz"
 ```
 
 Install the latest GitHub Release:
 
 ```bash
-pip install "dcn @ https://github.com/hypermusic-ai/dcn-sdk/releases/latest/download/dcn-python-sdk.tar.gz"
+pip install "decentralised-art @ https://github.com/decentralised-art/sdk/releases/latest/download/decentralised-art-python-sdk.tar.gz"
 ```
 
 Prefer the pinned URL in production so installs are reproducible.
@@ -20,9 +20,9 @@ Prefer the pinned URL in production so installs are reproducible.
 
 ```python
 from eth_account import Account
-import dcn
+import decentralised_art
 
-sdk = dcn.Client()  # https://api.decentralised.art/chain
+sdk = decentralised_art.Client()  # https://api.decentralised.art/chain
 
 version = sdk.version()
 print(version.version, version.build_timestamp)
@@ -50,7 +50,7 @@ print(sdk.simulate("pitch", 8)[0].path)
 ```
 
 The SDK defaults to the chain API base URL, `https://api.decentralised.art/chain`.
-Set `DCN_API_BASE` or pass `Client(base_url=...)` to target another chain API.
+Set `DECENTRALISED_ART_API_BASE` or pass `Client(base_url=...)` to target another chain API.
 
 ### Publishing on chain
 
@@ -80,7 +80,7 @@ import time
 from web3 import Web3
 from web3.middleware import SignAndSendRawMiddlewareBuilder
 
-from dcn.client import PreparedPublication
+from decentralised_art.client import PreparedPublication
 
 w3 = Web3(Web3.HTTPProvider("https://<chain-rpc-url>"))
 w3.middleware_onion.inject(SignAndSendRawMiddlewareBuilder.build(account), layer=0)
@@ -108,10 +108,10 @@ if isinstance(prepared, PreparedPublication):
 ## Code Generation
 
 The package generates its client from the OpenAPI source files in
-`../submodules/dcn-api-spec/services`. The SDK-owned
-`scripts/bundle-openapi.py` first bundles those per-service specs into one SDK
+`../submodules/api-spec/apis/chain`. The SDK-owned
+`scripts/bundle-openapi.py` first bundles those endpoint group specs into one SDK
 OpenAPI document under `../build/openapi/`, then `openapi-python-client`
-generates `dcn/dcn_api_client`.
+generates `decentralised_art/decentralised_art_api_client`.
 
 Generated clients can be regenerated manually:
 

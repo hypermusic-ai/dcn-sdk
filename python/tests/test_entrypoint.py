@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import unittest
 
-from dcn import Client as PublicClient
-from dcn.client import Client
+from decentralised_art import Client as PublicClient
+from decentralised_art.client import Client
 
 
 class TestEntrypoint(unittest.TestCase):

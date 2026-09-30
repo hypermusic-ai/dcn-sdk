@@ -7,4 +7,4 @@ exclude =
     .pyright,
     __pycache__,
     build,
-    dcn/dcn_api_client
+    decentralised_art/decentralised_art_api_client
