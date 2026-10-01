@@ -5,7 +5,7 @@
 Install a pinned GitHub Release with npm:
 
 ```bash
-npm install "https://github.com/decentralised-art/sdk/releases/download/v0.1.0/decentralised-art-js-sdk.tgz"
+npm install "https://github.com/decentralised-art/sdk/releases/download/v0.2.0/decentralised-art-js-sdk.tgz"
 ```
 
 Install the latest GitHub Release:
@@ -92,8 +92,9 @@ console.log(result.status); // 'mined', or 'published' if it already was
 
 Any wallet with ethers' `signTransaction` works this way. For anything else, pass
 `signer: { address, signTransaction(tx) }`: `tx` holds hex quantities, exactly the params
-of `eth_signTransaction`. After `loginWithSignature`, or with a wallet that cannot sign
-without sending (MetaMask), `publish` has no signer; use the browser wallet flow below.
+of `eth_signTransaction`. After `loginWithSignature`, `publish` has no signer. A browser
+wallet such as MetaMask cannot sign without sending: `publish` then fails before anything is
+sent, and the browser wallet flow below is the way to publish.
 
 The steps are also available one by one: `publishPrepare(kind, name, { relay: true })`,
 `publishSend(kind, { name, content_hash, raw_tx })` and `publishConfirm`.
@@ -128,4 +129,20 @@ if (prepared.status === 'prepared') {
   console.log(confirmed.status, confirmed.tx_hash); // 'mined'
 }
 // prepared.status === 'published': the registry already holds this exact entity.
+```
+
+### Errors
+
+Responses outside the 2xx range reject with `DecentralisedArtApiError`, which carries the HTTP
+`status` and the decoded response `body`:
+
+```typescript
+import { DecentralisedArtApiError } from 'decentralised-art';
+
+try {
+  await sdk.connectorGet('missing');
+} catch (error) {
+  if (error instanceof DecentralisedArtApiError) console.log(error.status, error.body);
+  else throw error;
+}
 ```

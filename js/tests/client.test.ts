@@ -341,6 +341,19 @@ describe('decentralised.art JS SDK wrapper', () => {
     expect(wallet.signTransaction).toHaveBeenCalledOnce();
   });
 
+  it('publish explains the browser flow when the signer cannot sign offline, and sends nothing', async () => {
+    const { client, calls } = relayServer(1);
+    const refusal = new Error('The method "eth_signTransaction" does not exist / is not available.');
+    const signTransaction = vi.fn(async () => {
+      throw refusal;
+    });
+
+    const failure = client.publish('transformation', 'shift', { signer: { address: ADDR, signTransaction } });
+    await expect(failure).rejects.toThrow(/cannot sign without sending: call publishPrepare/);
+    await expect(failure).rejects.toMatchObject({ cause: refusal });
+    expect(calls.map(({ path }) => path)).toEqual(['/publish/transformation/prepare']);
+  });
+
   it('publish has no signer without a transaction-signing login, and fails before preparing', async () => {
     const { client, calls } = relayServer(1);
 
