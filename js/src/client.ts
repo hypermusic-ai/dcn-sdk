@@ -646,7 +646,21 @@ export class DecentralisedArtClient {
         }
 
         // A publication never transfers value, whatever the server returned.
-        const raw_tx = await signer.signTransaction({ ...transaction, ...signing, type: '0x2', value: '0x0' });
+        let raw_tx: string;
+        try {
+            raw_tx = await signer.signTransaction({ ...transaction, ...signing, type: '0x2', value: '0x0' });
+        } catch (error) {
+            // Browser wallets (MetaMask and other EIP-1193 providers) cannot sign without sending.
+            // Nothing has been signed or sent at this point.
+            throw Object.assign(
+                new Error(
+                    'The signer could not sign the publication offline. Browser wallets such as MetaMask ' +
+                    'cannot sign without sending: call publishPrepare, send prepared.transaction with ' +
+                    'eth_sendTransaction, then publishConfirm'
+                ),
+                { cause: error }
+            );
+        }
         const { tx_hash } = await this.publishSend(kind, { name, content_hash, raw_tx });
 
         const attempts = opts.maxConfirmAttempts ?? 200;

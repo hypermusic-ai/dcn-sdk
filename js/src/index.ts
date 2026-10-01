@@ -1,2 +1,2 @@
 export * from './generated';
-export { DecentralisedArtClient } from './client';
+export { DecentralisedArtApiError, DecentralisedArtClient } from './client';
