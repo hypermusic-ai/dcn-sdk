@@ -5,7 +5,7 @@
 Install a pinned GitHub Release:
 
 ```bash
-pip install "decentralised-art @ https://github.com/decentralised-art/sdk/releases/download/v0.2.0/decentralised-art-python-sdk.tar.gz"
+pip install "decentralised-art @ https://github.com/decentralised-art/sdk/releases/download/v0.2.1/decentralised-art-python-sdk.tar.gz"
 ```
 
 Install the latest GitHub Release:

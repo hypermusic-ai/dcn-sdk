@@ -93,6 +93,10 @@ class CustomHook(BuildHookInterface[Any]):
         if os.getenv("NO_CODEGEN") == "1":
             self.app.display_info("Skipping OpenAPI generation (NO_CODEGEN=1)")
             return
+        if not SPEC_ROOT.exists() and (DEST / "client.py").exists():
+            # Building from an sdist: the client was generated before packaging.
+            self.app.display_info("Using the packaged OpenAPI client (no api-spec checkout)")
+            return
         self.app.display_info("Generating OpenAPI client from the API spec submodule...")
         main()
         self.app.display_info("OpenAPI client generation complete.")

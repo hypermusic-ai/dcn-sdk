@@ -5,7 +5,7 @@
 Install a pinned GitHub Release with npm:
 
 ```bash
-npm install "https://github.com/decentralised-art/sdk/releases/download/v0.2.0/decentralised-art-js-sdk.tgz"
+npm install "https://github.com/decentralised-art/sdk/releases/download/v0.2.1/decentralised-art-js-sdk.tgz"
 ```
 
 Install the latest GitHub Release:
