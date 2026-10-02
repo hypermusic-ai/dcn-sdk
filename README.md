@@ -29,7 +29,7 @@ pip install "git+https://github.com/decentralised-art/sdk.git@main#subdirectory=
 Install a pinned release:
 
 ```bash
-pip install "decentralised-art @ https://github.com/decentralised-art/sdk/releases/download/v0.2.0/decentralised-art-python-sdk.tar.gz"
+pip install "decentralised-art @ https://github.com/decentralised-art/sdk/releases/download/v0.2.1/decentralised-art-python-sdk.tar.gz"
 ```
 
 Install the latest GitHub Release:
@@ -47,7 +47,7 @@ Package name: `decentralised-art`
 Install a pinned release with npm:
 
 ```bash
-npm install "https://github.com/decentralised-art/sdk/releases/download/v0.2.0/decentralised-art-js-sdk.tgz"
+npm install "https://github.com/decentralised-art/sdk/releases/download/v0.2.1/decentralised-art-js-sdk.tgz"
 ```
 
 Install the latest GitHub Release:

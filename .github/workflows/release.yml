@@ -116,6 +116,29 @@ jobs:
           ls -l dist
         working-directory: python
 
+      - name: Install the sdist outside the repository
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          cp dist/decentralised-art-python-sdk.tar.gz "$RUNNER_TEMP/"
+          cd "$RUNNER_TEMP"
+          python -m venv sdist-check
+          sdist-check/bin/pip install "decentralised-art @ file://$RUNNER_TEMP/decentralised-art-python-sdk.tar.gz"
+          sdist-check/bin/python - "${TAG#v}" <<'PY'
+          import sys
+          from importlib.metadata import version
+
+          import decentralised_art
+
+          expected = sys.argv[1]
+          installed = version("decentralised-art")
+          assert installed == expected, f"sdist installs version {installed}, tag is {expected}"
+          assert decentralised_art.__version__ == expected, decentralised_art.__version__
+          decentralised_art.Client().close()
+          print(f"sdist {installed} installs and imports outside the repository")
+          PY
+        working-directory: python
+
       - name: Upload Python distribution
         uses: actions/upload-artifact@v4
         with:

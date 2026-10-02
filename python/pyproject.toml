@@ -39,7 +39,10 @@ tag-pattern = "^v(?P<version>.*)$"
 version-file = "decentralised_art/_version.py"   # optional but recommended for sdists
 
 [tool.hatch.version.raw-options]
-fallback_version = "0.1.0"
+# The git repository is the parent of this package directory; without this the
+# version silently falls back instead of coming from the release tag.
+root = ".."
+fallback_version = "0.0.0"
 
 [tool.hatch.build.targets.wheel]
 packages = ["decentralised_art", "decentralised_art.decentralised_art_api_client"]
@@ -49,6 +52,9 @@ packages = ["decentralised_art", "decentralised_art.decentralised_art_api_client
 "decentralised_art/decentralised_art_api_client" = "decentralised_art/decentralised_art_api_client"
 
 [tool.hatch.build.targets.sdist]
+# The generated client is git-ignored; ship it so the sdist installs without the
+# api-spec submodule.
+artifacts = ["decentralised_art/decentralised_art_api_client/**"]
 include = [
     "decentralised_art/**",
     "pyproject.toml",
